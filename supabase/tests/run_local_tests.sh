@@ -87,6 +87,9 @@ echo "Applying Migration 4: Functions & Triggers..."
 echo "Applying Migration 5: Scope & Security Correction..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000005_scope_and_security_correction.sql > /dev/null
 
+echo "Applying Migration 6: Workflow Engine..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000006_workflow_engine.sql > /dev/null
+
 echo "Applying Authoritative Seed Dataset..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/seed.sql > /dev/null
 
@@ -95,5 +98,8 @@ echo "Executing Security Audit Scenarios..."
 
 echo "Executing Phase 3C Adversarial Security & Storage Scenarios..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/adversarial_security_test.sql
+
+echo "Executing Phase 4 Workflow Engine & Invariant Scenarios..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/workflow_engine_test.sql
 
 echo "ALL VALIDATION CHECKS COMPLETED SUCCESSFULLY!"
