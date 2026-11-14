@@ -711,6 +711,54 @@ export interface Database {
         };
       };
     };
+    Views: {
+      public_spots: {
+        Row: {
+          spot_code: string;
+          pilot_id: string;
+          group_id: string;
+          category_id: string;
+          issue_type_id: string;
+          status: string;
+          severity_label: "low" | "medium" | "high" | null;
+          public_latitude: number;
+          public_longitude: number;
+          public_summary: string;
+          public_report_count: number;
+          created_at: string;
+          updated_at: string;
+          resolved_at: string | null;
+        };
+      };
+      public_spot_evidence: {
+        Row: {
+          spot_code: string;
+          evidence_stage: string;
+          storage_path_public: string;
+          mime_type: string;
+          public_approved_at: string;
+        };
+      };
+      public_demo_spots: {
+        Row: {
+          spot_code: string;
+          pilot_id: string;
+          group_id: string;
+          category_id: string;
+          issue_type_id: string;
+          status: string;
+          severity_label: "low" | "medium" | "high" | null;
+          public_latitude: number;
+          public_longitude: number;
+          public_summary: string;
+          public_report_count: number;
+          created_at: string;
+          updated_at: string;
+          resolved_at: string | null;
+          is_demo: boolean;
+        };
+      };
+    };
     Functions: {
       current_user_role: {
         Args: Record<PropertyKey, never>;
@@ -734,104 +782,6 @@ export interface Database {
       };
       generate_spot_code: {
         Args: { p_pilot_prefix?: string };
-        Returns: string;
-      };
-      create_report_submission: {
-        Args: {
-          p_telegram_user_hash: string;
-          p_encrypted_chat_id: string;
-          p_language: string;
-          p_pilot_id?: string;
-          p_group_id: string;
-          p_category_id: string;
-          p_issue_type_id: string;
-          p_description_private?: string | null;
-          p_latitude?: number | null;
-          p_longitude?: number | null;
-          p_horizontal_accuracy_m?: number | null;
-          p_location_source?: string;
-          p_storage_path_private?: string | null;
-          p_mime_type?: string | null;
-          p_file_size_bytes?: number | null;
-          p_sha256?: string | null;
-          p_telegram_file_unique_id?: string | null;
-          p_telegram_update_id?: number | null;
-          p_is_demo?: boolean;
-        };
-        Returns: Json;
-      };
-      create_spot_for_report: {
-        Args: {
-          p_report_id: string;
-          p_actor_user_id: string;
-          p_severity_label?: string | null;
-          p_assigned_organisation_id?: string | null;
-        };
-        Returns: Json;
-      };
-      link_report_to_spot: {
-        Args: {
-          p_report_id: string;
-          p_spot_id: string;
-          p_actor_user_id: string;
-          p_match_distance_m: number;
-          p_match_note?: string | null;
-        };
-        Returns: boolean;
-      };
-      transition_spot_status: {
-        Args: {
-          p_spot_id: string;
-          p_new_status: string;
-          p_actor_type: string;
-          p_actor_user_id: string;
-          p_note: string;
-          p_source?: string;
-        };
-        Returns: boolean;
-      };
-      record_authority_handoff: {
-        Args: {
-          p_spot_id: string;
-          p_destination_name: string;
-          p_handoff_method: string;
-          p_recorded_by: string;
-          p_note: string;
-          p_official_reference?: string | null;
-          p_proof_evidence_id?: string | null;
-          p_organisation_id?: string | null;
-        };
-        Returns: string;
-      };
-      submit_resolution_request: {
-        Args: {
-          p_spot_id: string;
-          p_submitted_by: string;
-          p_completion_note: string;
-          p_after_photo_evidence_id: string;
-          p_completion_date?: string | null;
-          p_work_order_reference?: string | null;
-          p_video_evidence_id?: string | null;
-        };
-        Returns: string;
-      };
-      review_resolution_request: {
-        Args: {
-          p_submission_id: string;
-          p_reviewed_by: string;
-          p_decision: string;
-          p_review_note: string;
-        };
-        Returns: boolean;
-      };
-      create_citizen_challenge: {
-        Args: {
-          p_spot_id: string;
-          p_citizen_contact_id: string;
-          p_challenge_type: string;
-          p_note?: string | null;
-          p_report_id?: string | null;
-        };
         Returns: string;
       };
     };
