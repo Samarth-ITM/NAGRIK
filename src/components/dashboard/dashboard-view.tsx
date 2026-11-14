@@ -96,10 +96,17 @@ export interface DashboardReport {
 interface DashboardViewProps {
   initialSpots: DashboardSpot[];
   initialUnlinkedReports: DashboardReport[];
+  initialUserRole?: string;
 }
 
-export function DashboardView({ initialSpots, initialUnlinkedReports }: DashboardViewProps) {
-  const [role, setRole] = useState<SimulatedRole>("super_admin");
+export function DashboardView({ initialSpots, initialUnlinkedReports, initialUserRole }: DashboardViewProps) {
+  const initialRole: SimulatedRole =
+    initialUserRole === "demo_viewer"
+      ? "demo_viewer"
+      : initialUserRole === "authority_admin" || initialUserRole === "authority_operator"
+      ? "authority_water"
+      : "super_admin";
+  const [role, setRole] = useState<SimulatedRole>(initialRole);
   const [workspace, setWorkspace] = useState<"live" | "demo">("live");
   const [spots, setSpots] = useState<DashboardSpot[]>(initialSpots);
   const [unlinkedReports, setUnlinkedReports] = useState<DashboardReport[]>(initialUnlinkedReports);
