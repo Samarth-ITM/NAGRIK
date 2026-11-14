@@ -45,6 +45,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       profiles: {
         Row: {
@@ -71,6 +72,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       organisation_memberships: {
         Row: {
@@ -100,6 +102,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       citizen_contacts: {
         Row: {
@@ -132,6 +135,7 @@ export interface Database {
           created_at?: string;
           last_seen_at?: string;
         };
+        Relationships: [];
       };
       spots: {
         Row: {
@@ -202,6 +206,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       reports: {
         Row: {
@@ -291,6 +296,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       evidence: {
         Row: {
@@ -344,6 +350,7 @@ export interface Database {
           public_approved_at?: string | null;
           delete_after?: string | null;
         };
+        Relationships: [];
       };
       status_history: {
         Row: {
@@ -379,6 +386,7 @@ export interface Database {
           source?: "telegram" | "admin_dashboard" | "authority_dashboard" | "system";
           created_at?: string;
         };
+        Relationships: [];
       };
       audit_logs: {
         Row: {
@@ -417,6 +425,7 @@ export interface Database {
           reason?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       authority_handoffs: {
         Row: {
@@ -458,6 +467,7 @@ export interface Database {
           note?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       resolution_submissions: {
         Row: {
@@ -505,6 +515,7 @@ export interface Database {
           created_at?: string;
           reviewed_at?: string | null;
         };
+        Relationships: [];
       };
       ai_assessments: {
         Row: {
@@ -546,6 +557,7 @@ export interface Database {
           requested_by?: string;
           created_at?: string;
         };
+        Relationships: [];
       };
       telegram_updates: {
         Row: {
@@ -569,6 +581,7 @@ export interface Database {
           processing_status?: "received" | "processed" | "failed" | "ignored_duplicate";
           failure_reason?: string | null;
         };
+        Relationships: [];
       };
       report_drafts: {
         Row: {
@@ -595,6 +608,7 @@ export interface Database {
           expires_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
       citizen_challenges: {
         Row: {
@@ -636,6 +650,7 @@ export interface Database {
           created_at?: string;
           reviewed_at?: string | null;
         };
+        Relationships: [];
       };
       notification_outbox: {
         Row: {
@@ -671,6 +686,7 @@ export interface Database {
           last_error?: string | null;
           created_at?: string;
         };
+        Relationships: [];
       };
       pilot_settings: {
         Row: {
@@ -709,6 +725,7 @@ export interface Database {
           created_at?: string;
           updated_at?: string;
         };
+        Relationships: [];
       };
     };
     Views: {
@@ -729,6 +746,7 @@ export interface Database {
           updated_at: string;
           resolved_at: string | null;
         };
+        Relationships: [];
       };
       public_spot_evidence: {
         Row: {
@@ -738,6 +756,7 @@ export interface Database {
           mime_type: string;
           public_approved_at: string;
         };
+        Relationships: [];
       };
       public_demo_spots: {
         Row: {
@@ -757,23 +776,24 @@ export interface Database {
           resolved_at: string | null;
           is_demo: boolean;
         };
+        Relationships: [];
       };
     };
     Functions: {
       current_user_role: {
-        Args: Record<PropertyKey, never>;
+        Args: Record<string, never>;
         Returns: string | null;
       };
       is_super_admin: {
-        Args: Record<PropertyKey, never>;
+        Args: Record<string, never>;
         Returns: boolean;
       };
       is_demo_viewer: {
-        Args: Record<PropertyKey, never>;
+        Args: Record<string, never>;
         Returns: boolean;
       };
       get_user_organisations: {
-        Args: Record<PropertyKey, never>;
+        Args: Record<string, never>;
         Returns: string[];
       };
       generate_ticket_code: {
@@ -784,6 +804,110 @@ export interface Database {
         Args: { p_pilot_prefix?: string };
         Returns: string;
       };
+      create_spot_for_report: {
+        Args: {
+          p_report_id: string;
+          p_actor_user_id: string;
+          p_severity_label?: string | null;
+          p_assigned_organisation_id?: string | null;
+        };
+        Returns: {
+          spot_id: string;
+          spot_code: string;
+          status: string;
+        };
+      };
+      link_report_to_spot: {
+        Args: {
+          p_report_id: string;
+          p_spot_id: string;
+          p_actor_user_id: string;
+          p_match_distance_m: number;
+          p_match_note?: string | null;
+        };
+        Returns: boolean;
+      };
+      transition_spot_status: {
+        Args: {
+          p_spot_id: string;
+          p_new_status: string;
+          p_actor_type: string;
+          p_actor_user_id: string;
+          p_note: string;
+          p_source?: string;
+        };
+        Returns: boolean;
+      };
+      record_authority_handoff: {
+        Args: {
+          p_spot_id: string;
+          p_destination_name: string;
+          p_handoff_method: string;
+          p_recorded_by: string;
+          p_note: string;
+          p_official_reference?: string | null;
+          p_proof_evidence_id?: string | null;
+          p_organisation_id?: string | null;
+        };
+        Returns: string;
+      };
+      submit_resolution_request: {
+        Args: {
+          p_spot_id: string;
+          p_submitted_by: string;
+          p_completion_note: string;
+          p_after_photo_evidence_id: string;
+          p_completion_date?: string | null;
+          p_work_order_reference?: string | null;
+          p_video_evidence_id?: string | null;
+        };
+        Returns: string;
+      };
+      review_resolution_request: {
+        Args: {
+          p_submission_id: string;
+          p_reviewed_by: string;
+          p_decision: string;
+          p_review_note: string;
+        };
+        Returns: boolean;
+      };
+      create_citizen_challenge: {
+        Args: {
+          p_spot_id: string;
+          p_citizen_contact_id: string;
+          p_challenge_type: string;
+          p_note?: string | null;
+          p_report_id?: string | null;
+        };
+        Returns: string;
+      };
+      find_duplicate_candidates: {
+        Args: {
+          p_latitude: number;
+          p_longitude: number;
+          p_category_id: string;
+          p_pilot_id?: string;
+          p_is_demo?: boolean;
+        };
+        Returns: Array<{
+          spot_id: string;
+          spot_code: string;
+          category_id: string;
+          issue_type_id: string;
+          status: string;
+          canonical_latitude: number;
+          canonical_longitude: number;
+          distance_metres: number;
+          candidate_band: string;
+        }>;
+      };
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
     };
   };
 }
