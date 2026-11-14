@@ -67,6 +67,9 @@ CREATE TABLE IF NOT EXISTS storage.objects (
     metadata jsonb
 );
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
+GRANT ALL ON TABLE storage.objects TO anon, authenticated, service_role;
+GRANT ALL ON TABLE storage.buckets TO anon, authenticated, service_role;
 EOF
 
 echo "Applying Migration 1: Core Schema..."
@@ -89,5 +92,8 @@ echo "Applying Authoritative Seed Dataset..."
 
 echo "Executing Security Audit Scenarios..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/security_audit_test.sql
+
+echo "Executing Phase 3C Adversarial Security & Storage Scenarios..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/adversarial_security_test.sql
 
 echo "ALL VALIDATION CHECKS COMPLETED SUCCESSFULLY!"
