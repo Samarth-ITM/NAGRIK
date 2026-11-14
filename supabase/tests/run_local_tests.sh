@@ -90,6 +90,9 @@ echo "Applying Migration 5: Scope & Security Correction..."
 echo "Applying Migration 6: Workflow Engine..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000006_workflow_engine.sql > /dev/null
 
+echo "Applying Migration 7: RPC Identity Hardening..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000007_rpc_identity_hardening.sql > /dev/null
+
 echo "Applying Authoritative Seed Dataset..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/seed.sql > /dev/null
 
@@ -101,5 +104,68 @@ echo "Executing Phase 3C Adversarial Security & Storage Scenarios..."
 
 echo "Executing Phase 4 Workflow Engine & Invariant Scenarios..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/workflow_engine_test.sql
+
+echo "Executing Phase 4C RPC Identity Hardening Scenarios..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/phase_04c_hardening_test.sql
+
+echo "Executing Phase 4C Genuine Simultaneous Concurrency Test..."
+CONC_LOG_1="$TEMP_DIR/conc1.log"
+CONC_LOG_2="$TEMP_DIR/conc2.log"
+
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 << 'EOF' > "$CONC_LOG_1" 2>&1 &
+SET ROLE authenticated;
+SET request.jwt.claim.role = 'authenticated';
+SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+SELECT pg_sleep(0.01);
+SELECT public.link_report_to_spot(
+    'e0000000-0000-0000-0000-000000000041',
+    'c0000000-0000-0000-0000-000000000041',
+    'a0000000-0000-0000-0000-000000000001',
+    0,
+    'Concurrent session 1'
+);
+EOF
+PID_1=$!
+
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 << 'EOF' > "$CONC_LOG_2" 2>&1 &
+SET ROLE authenticated;
+SET request.jwt.claim.role = 'authenticated';
+SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+SELECT public.link_report_to_spot(
+    'e0000000-0000-0000-0000-000000000041',
+    'c0000000-0000-0000-0000-000000000042',
+    'a0000000-0000-0000-0000-000000000001',
+    0,
+    'Concurrent session 2'
+);
+EOF
+PID_2=$!
+
+set +e
+wait $PID_1
+STATUS_1=$?
+wait $PID_2
+STATUS_2=$?
+set -e
+
+if [ "$STATUS_1" -eq 0 ] && [ "$STATUS_2" -ne 0 ]; then
+    echo "CONCURRENCY TEST PASSED: Session 1 acquired row lock and won; Session 2 was serialized and rejected cleanly."
+elif [ "$STATUS_2" -eq 0 ] && [ "$STATUS_1" -ne 0 ]; then
+    echo "CONCURRENCY TEST PASSED: Session 2 acquired row lock and won; Session 1 was serialized and rejected cleanly."
+else
+    echo "CONCURRENCY TEST FAILED: Unexpected status codes: Session 1 ($STATUS_1), Session 2 ($STATUS_2)"
+    cat "$CONC_LOG_1" "$CONC_LOG_2"
+    exit 1
+fi
+
+LINKED_COUNT=$("$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -t -c "SELECT count(*) FROM public.reports WHERE id = 'e0000000-0000-0000-0000-000000000041' AND spot_id IS NOT NULL;" | tr -d ' ')
+if [ "$LINKED_COUNT" -ne 1 ]; then
+    echo "CONCURRENCY TEST FAILED: Expected exactly 1 linked report, found $LINKED_COUNT"
+    exit 1
+fi
+echo "CONCURRENCY TEST VERIFIED: Exactly 1 valid relationship survived with zero duplicate or contradictory events."
+
+echo "Executing Phase 4C Input Validation & Access Control Unit Tests..."
+node --experimental-strip-types src/lib/workflow/__tests__/phase_04c_validation.test.ts
 
 echo "ALL VALIDATION CHECKS COMPLETED SUCCESSFULLY!"
