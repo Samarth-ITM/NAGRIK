@@ -169,3 +169,122 @@ Implement the complete, production-grade database foundation for Nagrik using Su
 ## 16. Current Verdict & Recommended Next Phase
 - **Current Verdict:** **VERIFIED**
 - **Recommended Next Phase:** **PHASE 4 — Civic reporting, physical issue matching, evidence and resolution workflow**.
+
+
+---
+
+# PHASE 3A: SECURITY AUDIT, SCOPE CORRECTION & RUNTIME DATABASE VALIDATION
+
+## 1. Executive Summary
+Following the initial Phase 3 implementation, an exhaustive security audit and scope correction was conducted against the PostgreSQL database migrations and RLS configuration. The audit identified and corrected three critical architectural vulnerabilities:
+1. **Public Data Exposure Loophole:** Permissive anonymous row-level SELECT policies on base tables (`reports`, `evidence`, `status_history`, `spots`) allowed column-level leakage of citizen private text descriptions, exact GPS coordinates, contact foreign keys, internal UUIDs, reviewer notes, and private evidence storage paths.
+2. **Premature Application Workflow Implementation:** Eight application-level workflow RPC functions (`create_report_submission`, `create_spot_for_report`, `link_report_to_spot`, `transition_spot_status`, `record_authority_handoff`, `submit_resolution_request`, `review_resolution_request`, `create_citizen_challenge`) were implemented ahead of their scheduled phases.
+3. **Unverified Pilot Geofence Anchor:** The approximate geofence centre coordinate (`19.0475, 73.0699`) was not marked as unverified, creating a risk of unverified production geofence activation.
+4. **Seed UUID Hex Syntax Error:** Invalid character `h` in seed UUID literal `dh000000-...` was caught via real PostgreSQL runtime execution and corrected to valid hex.
+
+All defects were resolved via follow-up migration `supabase/migrations/20261115000005_scope_and_security_correction.sql`, workflow definitions were archived under `supabase/deferred_workflows/`, and all 12 security test scenarios were executed and verified against a live local PostgreSQL 17 database.
+
+## A. Public Data Security
+- **Defect Remediated:** PostgreSQL Row Level Security filters rows, not columns. Allowing anonymous users to select approved rows exposed private columns (`description_private`, `citizen_contact_id`, raw GPS coordinates, `storage_path_private`, `actor_user_id`, `match_note`).
+- **Exact Revocations & Grants:**
+  - Revoked direct SELECT on base tables from role `anon`: `spots`, `reports`, `evidence`, `status_history`, `audit_logs`, `citizen_contacts`, `citizen_challenges`, `authority_handoffs`, `resolution_submissions`, `ai_assessments`, `telegram_updates`, `report_drafts`, `notification_outbox`.
+  - Dropped policies: `spots_public_read`, `reports_public_read`, `evidence_public_read`, `status_history_public_read`.
+  - Granted SELECT to `anon` and `authenticated` exclusively on safe public views: `public.public_spots`, `public.public_spot_evidence`, and `public.public_demo_spots`.
+- **Public View Definitions:**
+  - `public.public_spots`:
+    - *Columns Exposed:* `spot_code`, `pilot_id`, `group_id`, `category_id`, `issue_type_id`, `status`, `severity_label`, `public_latitude` (rounded to 4 decimal places ~11m), `public_longitude` (rounded to 4 decimal places), `public_summary` (sanitized approved summary), `public_report_count`, `created_at`, `updated_at`, `resolved_at`.
+    - *Sensitive Columns Excluded:* Internal `id` (UUID), `canonical_latitude` (raw), `canonical_longitude` (raw), `anchor_accuracy_m`, `assigned_organisation_id`, citizen private descriptions, citizen contact IDs, reviewer identities, and Telegram update references.
+    - *Filter:* `WHERE public_approved = true AND is_demo = false`.
+  - `public.public_spot_evidence`:
+    - *Columns Exposed:* `spot_code`, `evidence_stage`, `storage_path_public`, `mime_type`, `public_approved_at`.
+    - *Sensitive Columns Excluded:* `storage_path_private`, `uploaded_by_user_id`, `uploaded_by_contact_id`, `telegram_file_unique_id`, `file_size_bytes`, `sha256`.
+    - *Filter:* `WHERE public_approved_at IS NOT NULL AND storage_path_public IS NOT NULL AND s.public_approved = true AND s.is_demo = false`.
+  - `public.public_demo_spots`:
+    - *Filter:* `WHERE is_demo = true` (permanently watermarked with `is_demo = true`).
+
+## B. Tenant Isolation & Privilege Escalation Hardening
+- **Policy-by-Policy Enforcement:**
+  - `spots`: Authorities can only query and update spots where `assigned_organisation_id in (select public.get_user_organisations()) and is_demo = false`.
+  - `reports`: Authorities can only view reports attached to spots assigned to their organisation.
+  - `evidence`: Authorities can only view evidence attached to spots assigned to their organisation.
+  - `citizen_contacts`: Strict default deny. Authorities have zero read/write access.
+- **Role Escalation Prevention:**
+  - Trigger `trg_prevent_role_escalation` on `public.profiles`: Intercepts `BEFORE UPDATE OF role` and throws exception unless the actor is an active `super_admin` or `service_role`.
+  - Trigger `trg_prevent_membership_escalation` on `public.organisation_memberships`: Intercepts `BEFORE INSERT OR UPDATE OR DELETE` and throws exception unless the actor is `super_admin` or `service_role`.
+- **Demo Workspace Isolation:**
+  - Trigger `trg_guard_demo_mutations` on `spots`, `reports`, `evidence`, `resolution_submissions`: Intercepts any mutation by a user with `role = 'demo_viewer'` and aborts with `Forbidden: Demonstration workspace is strictly read-only`.
+- **Resolution Approval Guard:**
+  - Trigger `trg_guard_spot_resolution` on `public.spots`: Intercepts `BEFORE UPDATE OF status` when transitioning to `RESOLVED` and throws exception unless the caller is `super_admin` or `service_role`.
+
+## C. Storage Configuration & Evidence Privacy
+- **Bucket Visibility:**
+  - `evidence-private`: Private (not public). Preserves citizen originals and authority repair photos. Accessible only via short-lived signed URLs.
+  - `evidence-public-approved`: Public. Contains only sanitized, super-admin-approved image derivatives.
+  - `demo-evidence`: Public. Contains exclusively synthetic demonstration assets.
+- **Evidence Privacy Boundaries:**
+  - Citizen originals and authority after-photos remain strictly in `evidence-private`.
+  - Public web application only references derivatives located in `evidence-public-approved` through `public_spot_evidence`.
+  - Storage policies restrict authority users from downloading private objects not belonging to their assigned spots.
+
+## D. RPC Scope Correction
+- **Functions Retained in Active Migrations:**
+  - `public.handle_updated_at()`: Essential automatic timestamp maintenance trigger.
+  - `public.generate_ticket_code()`: Safe sequential code generator for citizen tickets (`NAG-KHR-YYYY-XXXXXX`).
+  - `public.generate_spot_code()`: Safe sequential code generator for physical spot codes (`SPT-KHR-XXXXXX`).
+  - `public.current_user_role()`, `public.is_super_admin()`, `public.get_user_organisations()`, `public.is_demo_viewer()`: Fundamental security helper functions required for RLS and trigger enforcement.
+- **Functions Deferred to Phase 4 (Civic Reporting & Resolution Workflows):**
+  - `create_spot_for_report`
+  - `link_report_to_spot`
+  - `transition_spot_status`
+  - `record_authority_handoff`
+  - `submit_resolution_request`
+  - `review_resolution_request`
+  - `create_citizen_challenge`
+- **Functions Deferred to Phase 5 (Telegram Bot Integration):**
+  - `create_report_submission`
+- **Reason for Decision:** Adheres to strict phase boundaries. Application-level multi-step workflow logic belongs in Phase 4 and Phase 5 service layers and transactional APIs, while Phase 3 provides the clean, unencumbered relational foundation.
+- **Archival Location:** Full definitions preserved in `supabase/deferred_workflows/deferred_workflow_functions.sql`.
+
+## E. Pilot Coordinate Verification State
+- **Current Centre Coordinate:** `19.0475000, 73.0699000` (Approximate Sector 4 ITM campus perimeter).
+- **Verification Status:** `PENDING_OWNER_ON_SITE_VERIFICATION`
+- **Verification Requirement:** The project owner must physically stand at the ITM main public pedestrian entrance, capture high-accuracy GPS coordinates (accuracy < 5m) via mobile GPS or bot test, and update `pilot_settings.centre_latitude` and `pilot_settings.centre_longitude`.
+- **Production Geofence Guard:** `pilot_settings.settings_payload` has `centre_verified: false` and `production_geofence_active: false`. Live reporting flows cannot treat this coordinate as an approved geofence until explicitly updated by the owner.
+
+## F. Runtime Validation Results
+- **Validation Environment:** Native PostgreSQL 17.11 on macOS (isolated throwaway cluster on port 54399).
+- **Commands Executed:**
+  - `./supabase/tests/run_local_tests.sh` &rarr; Ran bootstrap mocks, migrations 1–5, seed, and 12 security test scenarios.
+  - `npx tsc --noEmit` &rarr; TypeScript type validation.
+  - `npm run lint` &rarr; ESLint static code analysis.
+  - `npm run build` &rarr; Next.js 15 production compilation.
+- **Security Audit Scenario Test Results:**
+  - Scenario 1 (Anon cannot read private reports): **PASSED** (Permission denied on base table).
+  - Scenario 2 (Anon cannot read citizen contacts): **PASSED** (Permission denied on base table).
+  - Scenario 3 (Anon can only read approved public projection): **PASSED** (Only public-approved, non-demo spots returned).
+  - Scenario 4 (Anon cannot access private evidence): **PASSED** (Permission denied on base table; public view exposes only approved derivatives).
+  - Scenario 5 (Authority A cannot read Authority B records): **PASSED** (Tenant isolation verified via RLS).
+  - Scenario 6 (Authority cannot access unassigned live records): **PASSED** (Unassigned spots hidden).
+  - Scenario 7 (Authority cannot read citizen identity): **PASSED** (Zero rows returned; citizen contacts hidden).
+  - Scenario 8 (Demo viewer cannot read live records): **PASSED** (Live spots hidden from demo viewer).
+  - Scenario 9 (Demo viewer cannot modify demo records): **PASSED** (Mutations blocked by RLS and guard triggers).
+  - Scenario 10 (Authority cannot approve final resolution): **PASSED** (Trigger `guard_spot_resolution` blocked resolution).
+  - Scenario 11 (Non-admin cannot grant themselves super-admin): **PASSED** (Trigger `prevent_role_escalation` blocked role escalation).
+  - Scenario 12 (Public projection does not expose private coordinates or paths): **PASSED** (Coordinates rounded to ~11m; private paths excluded).
+- **TypeScript & Build Results:** Zero type errors; production build succeeded in 3.7s.
+
+## G. Outstanding Risks & Defect Accounting
+- **Confirmed Defects Identified During Audit:**
+  1. Overly permissive base table SELECT policies for anonymous role.
+  2. Premature migration of application workflow RPC functions.
+  3. Unverified pilot geofence anchor without explicit verification flag.
+  4. Non-hex character `h` in seed UUID `dh000000-...`.
+- **Remediation Status:**
+  - All 4 confirmed defects **RESOLVED AND TESTED**.
+- **Unverified Assumptions:**
+  - None within database scope. Remote Supabase migration execution remains unapplied (by design, per Phase 3 instruction).
+- **Actions Requiring Owner Approval:**
+  - On-site physical GPS verification of ITM main public entrance before production geofence activation.
+
+## H. Phase 3A Final Verdict
+**PASS** — Database foundation, tenant isolation, public projection views, and security invariant triggers are fully implemented, verified via PostgreSQL 17 runtime testing, and certified safe.
