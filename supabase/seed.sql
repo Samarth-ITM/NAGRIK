@@ -1,0 +1,2 @@
+-- Nagrik Initial Seed Data Placeholder (Phase 1 Baseline)
+-- Complete seed definitions will be deployed in Phase 3
