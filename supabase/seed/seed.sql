@@ -1,2 +1,0 @@
--- Nagrik Database Seed Placeholder
--- Initial synthetic data for isolated CIDCO demo workspace will be created in Phase 3
