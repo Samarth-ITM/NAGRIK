@@ -29,7 +29,11 @@ values (
         'strong_candidate_m', 5,
         'accuracy_threshold_m', 20,
         'allow_voice_notes', true,
-        'require_citizen_consent', true
+        'require_citizen_consent', true,
+        'centre_verified', false,
+        'production_geofence_active', false,
+        'verification_status', 'PENDING_OWNER_ON_SITE_VERIFICATION',
+        'verification_requirement', 'Project owner must stand at the ITM main public pedestrian entrance, capture high-accuracy GPS coordinates (accuracy < 5m) via mobile device or bot, and update pilot_settings centre_latitude and centre_longitude before activating live reporting.'
     )
 )
 on conflict (id) do update set
@@ -427,7 +431,7 @@ insert into public.status_history (
 )
 values
     (
-        'dh000000-0000-0000-0000-000000000001',
+        'df000000-0000-0000-0000-000000000001',
         'd1000000-0000-0000-0000-000000000101',
         'NEW',
         'VERIFIED',
@@ -437,7 +441,7 @@ values
         '2026-11-09T10:00:00Z'
     ),
     (
-        'dh000000-0000-0000-0000-000000000002',
+        'df000000-0000-0000-0000-000000000002',
         'd1000000-0000-0000-0000-000000000101',
         'VERIFIED',
         'ASSIGNED',
@@ -447,7 +451,7 @@ values
         '2026-11-10T12:00:00Z'
     ),
     (
-        'dh000000-0000-0000-0000-000000000003',
+        'df000000-0000-0000-0000-000000000003',
         'd1000000-0000-0000-0000-000000000101',
         'ASSIGNED',
         'IN_PROGRESS',
@@ -457,7 +461,7 @@ values
         '2026-11-13T14:30:00Z'
     ),
     (
-        'dh000000-0000-0000-0000-000000000004',
+        'df000000-0000-0000-0000-000000000004',
         'd1000000-0000-0000-0000-000000000105',
         'RESOLUTION_SUBMITTED',
         'RESOLVED',
