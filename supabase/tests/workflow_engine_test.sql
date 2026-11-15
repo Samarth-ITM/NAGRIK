@@ -491,9 +491,6 @@ BEGIN
         raise exception 'TEST 13 FAILED: Reopened spot failed to transition to IN_PROGRESS!';
     end if;
 
-    -- Reset Spot 15 back to RESOLVED for test isolation
-    UPDATE public.spots SET status = 'RESOLVED', resolved_at = now() WHERE id = v_resolved_spot_id;
-
     RAISE NOTICE 'TEST 13 PASSED: Reopening follows approved transition rules.';
 END;
 $$;
@@ -868,6 +865,44 @@ $$;
 -- ============================================================================
 -- GROUP 5: CITIZEN CHALLENGES (TESTS 25 - 28)
 -- ============================================================================
+
+-- Setup: Transition Spot back to RESOLVED via approved resolution so challenges can be tested
+SET ROLE authenticated;
+SET request.jwt.claim.role = 'authenticated';
+SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000002'; -- Authority User
+
+DO $$
+DECLARE
+    v_spot_id uuid;
+    v_sub_id uuid;
+BEGIN
+    select spot_id into v_spot_id from public.reports where id = 'e0000000-0000-0000-0000-000000000010';
+    v_sub_id := public.submit_resolution_request(
+        v_spot_id,
+        'a0000000-0000-0000-0000-000000000002',
+        'Verified second repair completed with high quality after-photo.',
+        'e1000000-0000-0000-0000-000000000020'
+    );
+END;
+$$;
+
+SET ROLE authenticated;
+SET request.jwt.claim.role = 'authenticated';
+SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001'; -- Super Admin
+
+DO $$
+DECLARE
+    v_sub_id uuid;
+BEGIN
+    select id into v_sub_id from public.resolution_submissions where review_status = 'pending' limit 1;
+    PERFORM public.review_resolution_request(
+        v_sub_id,
+        'a0000000-0000-0000-0000-000000000001',
+        'approved',
+        'Approved re-repair; spot returned to RESOLVED.'
+    );
+END;
+$$;
 
 -- TEST 25: Valid challenge recorded
 DO $$

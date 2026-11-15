@@ -424,7 +424,7 @@ BEGIN
 END;
 $$;
 
--- ADVERSARIAL TEST 6: Service-role resolution permissions and intended trust boundary
+-- ADVERSARIAL TEST 6: Service-role resolution permissions & mandatory invariant enforcement
 RESET ROLE;
 SET request.jwt.claim.role = 'service_role';
 SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
@@ -432,23 +432,48 @@ SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
 DO $$
 DECLARE
     v_spot_a_id uuid := 'c0000000-0000-0000-0000-000000000001';
+    v_evidence_id uuid := 'e1000000-0000-0000-0000-000000000001';
+    v_submission_id uuid;
     v_status text;
     v_resolved_at timestamptz;
 BEGIN
-    -- Service role can transition status to RESOLVED
+    -- 1. Invariant check: Direct transition from ASSIGNED to RESOLVED must fail even for service_role
+    BEGIN
+        UPDATE public.spots SET status = 'RESOLVED' WHERE id = v_spot_a_id;
+        RAISE EXCEPTION 'ADVERSARIAL TEST 6 FAILED: Direct ASSIGNED -> RESOLVED bypass succeeded for service_role!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%Illegal resolution: Spot % can only be transitioned to RESOLVED from RESOLUTION_SUBMITTED state%' THEN
+            RAISE NOTICE 'ADVERSARIAL TEST 6A PASSED: Direct transition from ASSIGNED to RESOLVED blocked by trigger guard for service_role.';
+        ELSE
+            RAISE EXCEPTION 'ADVERSARIAL TEST 6 FAILED: Unexpected error on direct resolution attempt: %', SQLERRM;
+        END IF;
+    END;
+
+    -- 2. Legitimate workflow: Transition to RESOLUTION_SUBMITTED with approved submission and after-photo evidence
+    UPDATE public.spots SET status = 'RESOLUTION_SUBMITTED' WHERE id = v_spot_a_id;
+
+    INSERT INTO public.resolution_submissions (
+        spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status, reviewed_by, reviewed_at
+    ) VALUES (
+        v_spot_a_id, 'a0000000-0000-0000-0000-000000000002', 'Repairs completed by field team',
+        v_evidence_id, 'approved', 'a0000000-0000-0000-0000-000000000001', now()
+    ) RETURNING id INTO v_submission_id;
+
+    -- Now transition to RESOLVED succeeds
     UPDATE public.spots SET status = 'RESOLVED' WHERE id = v_spot_a_id;
 
     SELECT status, resolved_at INTO v_status, v_resolved_at
     FROM public.spots WHERE id = v_spot_a_id;
 
     IF v_status != 'RESOLVED' OR v_resolved_at IS NULL THEN
-        RAISE EXCEPTION 'ADVERSARIAL TEST 6 FAILED: Service role resolution failed to set resolved_at!';
+        RAISE EXCEPTION 'ADVERSARIAL TEST 6 FAILED: Legitimate resolution failed to set resolved_at!';
     END IF;
 
-    -- Clean up: revert spot status back to ASSIGNED
+    -- Clean up: delete test submission and revert spot status back to ASSIGNED
+    DELETE FROM public.resolution_submissions WHERE id = v_submission_id;
     UPDATE public.spots SET status = 'ASSIGNED', resolved_at = null WHERE id = v_spot_a_id;
 
-    RAISE NOTICE 'ADVERSARIAL TEST 6 PASSED: Service role correctly authorized for resolution transitions within backend trust boundary';
+    RAISE NOTICE 'ADVERSARIAL TEST 6B PASSED: Legitimate resolution with approved evidence correctly succeeds within backend trust boundary.';
 END;
 $$;
 

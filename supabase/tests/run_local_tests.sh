@@ -93,6 +93,9 @@ echo "Applying Migration 6: Workflow Engine..."
 echo "Applying Migration 7: RPC Identity Hardening..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000007_rpc_identity_hardening.sql > /dev/null
 
+echo "Applying Migration 8: Security & Invariant Remediation..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000008_security_and_invariant_remediation.sql > /dev/null
+
 echo "Applying Authoritative Seed Dataset..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/seed.sql > /dev/null
 
@@ -164,6 +167,72 @@ if [ "$LINKED_COUNT" -ne 1 ]; then
     exit 1
 fi
 echo "CONCURRENCY TEST VERIFIED: Exactly 1 valid relationship survived with zero duplicate or contradictory events."
+
+echo "Executing Phase 4D Database Security & Workflow Invariant Remediation Scenarios..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/phase_04d_remediation_test.sql
+
+echo "Executing Phase 4D Citizen Challenge Concurrency Test..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -c "
+INSERT INTO public.citizen_contacts (
+    id, telegram_user_hash, encrypted_chat_id, language
+) VALUES (
+    'f0000000-0000-0000-0000-000000000003', 'synthetic_hash_333333', 'synthetic_chat_333333', 'en'
+) ON CONFLICT (id) DO NOTHING;
+" > /dev/null
+
+CHAL_LOG_1="$TEMP_DIR/chal1.log"
+CHAL_LOG_2="$TEMP_DIR/chal2.log"
+
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 << 'EOF' > "$CHAL_LOG_1" 2>&1 &
+SET ROLE authenticated;
+SET request.jwt.claim.role = 'authenticated';
+SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+SELECT pg_sleep(0.01);
+SELECT public.create_citizen_challenge(
+    'c0000000-0000-0000-0000-000000000081',
+    'f0000000-0000-0000-0000-000000000003',
+    'still_not_fixed',
+    'Concurrent challenge session 1'
+);
+EOF
+CHAL_PID_1=$!
+
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 << 'EOF' > "$CHAL_LOG_2" 2>&1 &
+SET ROLE authenticated;
+SET request.jwt.claim.role = 'authenticated';
+SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+SELECT public.create_citizen_challenge(
+    'c0000000-0000-0000-0000-000000000081',
+    'f0000000-0000-0000-0000-000000000003',
+    'still_not_fixed',
+    'Concurrent challenge session 2'
+);
+EOF
+CHAL_PID_2=$!
+
+set +e
+wait $CHAL_PID_1
+CHAL_STATUS_1=$?
+wait $CHAL_PID_2
+CHAL_STATUS_2=$?
+set -e
+
+if [ "$CHAL_STATUS_1" -eq 0 ] && [ "$CHAL_STATUS_2" -ne 0 ]; then
+    echo "CHALLENGE CONCURRENCY TEST PASSED: Session 1 acquired lock and won; Session 2 was serialized and rejected."
+elif [ "$CHAL_STATUS_2" -eq 0 ] && [ "$CHAL_STATUS_1" -ne 0 ]; then
+    echo "CHALLENGE CONCURRENCY TEST PASSED: Session 2 acquired lock and won; Session 1 was serialized and rejected."
+else
+    echo "CHALLENGE CONCURRENCY TEST FAILED: Unexpected status codes: Session 1 ($CHAL_STATUS_1), Session 2 ($CHAL_STATUS_2)"
+    cat "$CHAL_LOG_1" "$CHAL_LOG_2"
+    exit 1
+fi
+
+ACTIVE_CHAL_COUNT=$("$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -t -c "SELECT count(*) FROM public.citizen_challenges WHERE spot_id = 'c0000000-0000-0000-0000-000000000081' AND citizen_contact_id = 'f0000000-0000-0000-0000-000000000003' AND status IN ('new', 'under_review');" | tr -d ' ')
+if [ "$ACTIVE_CHAL_COUNT" -ne 1 ]; then
+    echo "CHALLENGE CONCURRENCY TEST FAILED: Expected exactly 1 active challenge, found $ACTIVE_CHAL_COUNT"
+    exit 1
+fi
+echo "CHALLENGE CONCURRENCY VERIFIED: Exactly 1 active challenge created with zero duplicate or race conditions."
 
 echo "Executing Phase 4C Input Validation & Access Control Unit Tests..."
 node --experimental-strip-types src/lib/workflow/__tests__/phase_04c_validation.test.ts

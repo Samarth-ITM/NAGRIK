@@ -332,12 +332,12 @@ DO $$
 DECLARE
     v_count int;
 BEGIN
-    -- Verify rounded coordinates in public_spots (~11m precision: 19.0469, 73.0691)
+    -- Verify discretized coordinates in public_spots (25-50m grid precision: 19.0470, 73.0692)
     SELECT count(*) INTO v_count
     FROM public.public_spots
     WHERE spot_code = 'SPT-KHR-000904'
-      AND public_latitude = 19.0469
-      AND public_longitude = 73.0691;
+      AND public_latitude = 19.0470
+      AND public_longitude = 73.0692;
 
     IF v_count != 1 THEN
         RAISE EXCEPTION 'SCENARIO 12 FAILED: Coordinates in public_spots are not rounded or exposed raw precision!';
