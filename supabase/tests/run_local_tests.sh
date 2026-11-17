@@ -96,6 +96,9 @@ echo "Applying Migration 7: RPC Identity Hardening..."
 echo "Applying Migration 8: Security & Invariant Remediation..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000008_security_and_invariant_remediation.sql > /dev/null
 
+echo "Applying Migration 9: Resolution Provenance & Evidence Hardening..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000009_resolution_provenance_and_evidence_hardening.sql > /dev/null
+
 echo "Applying Authoritative Seed Dataset..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/seed.sql > /dev/null
 
@@ -218,12 +221,22 @@ CHAL_STATUS_2=$?
 set -e
 
 if [ "$CHAL_STATUS_1" -eq 0 ] && [ "$CHAL_STATUS_2" -ne 0 ]; then
-    echo "CHALLENGE CONCURRENCY TEST PASSED: Session 1 acquired lock and won; Session 2 was serialized and rejected."
+    echo "CHALLENGE CONCURRENCY TEST: Session 1 acquired lock and won; Session 2 was serialized."
+    REJECTED_LOG="$CHAL_LOG_2"
 elif [ "$CHAL_STATUS_2" -eq 0 ] && [ "$CHAL_STATUS_1" -ne 0 ]; then
-    echo "CHALLENGE CONCURRENCY TEST PASSED: Session 2 acquired lock and won; Session 1 was serialized and rejected."
+    echo "CHALLENGE CONCURRENCY TEST: Session 2 acquired lock and won; Session 1 was serialized."
+    REJECTED_LOG="$CHAL_LOG_1"
 else
     echo "CHALLENGE CONCURRENCY TEST FAILED: Unexpected status codes: Session 1 ($CHAL_STATUS_1), Session 2 ($CHAL_STATUS_2)"
     cat "$CHAL_LOG_1" "$CHAL_LOG_2"
+    exit 1
+fi
+
+if grep -q "Duplicate challenge: An active challenge from this citizen is already pending review" "$REJECTED_LOG"; then
+    echo "CHALLENGE CONCURRENCY TEST PASSED: Row locking isolated and verified. Rejection occurred via application rate-limit logic, not unhandled constraint crash."
+else
+    echo "CHALLENGE CONCURRENCY TEST FAILED: Rejected session did not fail with application lock rate-limit message. Log output:"
+    cat "$REJECTED_LOG"
     exit 1
 fi
 

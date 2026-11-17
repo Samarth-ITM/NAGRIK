@@ -57,12 +57,14 @@ BEGIN
         1048576, 'image/jpeg', '8181818181818181818181818181818181818181818181818181818181818181'
     ) ON CONFLICT (id) DO NOTHING;
 
-    -- Resolution submission for Spot 81
+    -- Resolution submission for Spot 81 (pre-approved with super-admin provenance)
     INSERT INTO public.resolution_submissions (
-        spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status
+        spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status,
+        reviewed_by, reviewed_at
     ) VALUES (
         'c0000000-0000-0000-0000-000000000081', 'a0000000-0000-0000-0000-000000000002',
-        'Pipe repaired and sealed.', 'e1000000-0000-0000-0000-000000000081', 'approved'
+        'Pipe repaired and sealed.', 'e1000000-0000-0000-0000-000000000081', 'approved',
+        'a0000000-0000-0000-0000-000000000001', now()
     ) ON CONFLICT DO NOTHING;
 
     -- Transition Spot 81 to RESOLVED now that approved submission exists
@@ -526,12 +528,153 @@ BEGIN
 END;
 $$;
 
+-- ============================================================================
+-- SCENARIO 12: RESOLUTION APPROVAL PROVENANCE & EVIDENCE HARDENING ADVERSARIAL TESTS
+-- Authority: TRD Section 6.4, 9.3, 11 & Phase 4D Final Security Remediation
+-- ============================================================================
+RESET ROLE;
+SET search_path = public, auth;
+SET request.jwt.claim.role = 'service_role';
+
+DO $$
+DECLARE
+    v_test_spot_id uuid := 'c0000000-0000-0000-0000-000000000099';
+    v_sub_id uuid;
+    v_invalid_ev_id uuid := 'e1000000-0000-0000-0000-000000000091';
+    v_valid_ev_id uuid := 'e1000000-0000-0000-0000-000000000092';
+    v_super_admin_id uuid := 'a0000000-0000-0000-0000-000000000001';
+    v_authority_a_id uuid := 'a0000000-0000-0000-0000-000000000002';
+    v_org_a_id uuid := 'b0000000-0000-0000-0000-000000000001';
+    v_spot record;
+BEGIN
+    -- Create test spot in RESOLUTION_SUBMITTED status
+    INSERT INTO public.spots (
+        id, spot_code, pilot_id, group_id, category_id, issue_type_id,
+        canonical_latitude, canonical_longitude, anchor_accuracy_m, status,
+        assigned_organisation_id, public_approved, is_demo
+    ) VALUES (
+        v_test_spot_id, 'SPT-KHR-000099', 'kharghar_itm_v1',
+        'utilities_lighting_greenery', 'water_supply_public_taps', 'water_pipeline_leakage',
+        19.0475100, 73.0699400, 4.0, 'RESOLUTION_SUBMITTED',
+        v_org_a_id, true, false
+    ) ON CONFLICT (id) DO UPDATE SET status = 'RESOLUTION_SUBMITTED';
+
+    -- Create invalid evidence (evidence_stage = 'other', mime_type = 'text/plain')
+    INSERT INTO public.evidence (
+        id, spot_id, evidence_stage, storage_path_private, file_size_bytes, mime_type, sha256
+    ) VALUES (
+        v_invalid_ev_id, v_test_spot_id, 'other', 'evidence-private/spots/test_doc.txt',
+        1024, 'text/plain', '9191919191919191919191919191919191919191919191919191919191919191'
+    ) ON CONFLICT (id) DO NOTHING;
+
+    -- Create valid after-photo evidence (evidence_stage = 'authority_after', mime_type = 'image/jpeg')
+    INSERT INTO public.evidence (
+        id, spot_id, evidence_stage, storage_path_private, file_size_bytes, mime_type, sha256
+    ) VALUES (
+        v_valid_ev_id, v_test_spot_id, 'authority_after', 'evidence-private/spots/valid_after.jpg',
+        1048576, 'image/jpeg', '9292929292929292929292929292929292929292929292929292929292929292'
+    ) ON CONFLICT (id) DO NOTHING;
+
+    -- Sub-scenario 12A: Attempt to directly insert pre-approved submission with invalid (non-after-photo) evidence
+    BEGIN
+        INSERT INTO public.resolution_submissions (
+            spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status,
+            reviewed_by, reviewed_at
+        ) VALUES (
+            v_test_spot_id, v_authority_a_id, 'Adversarial submission', v_invalid_ev_id, 'approved',
+            v_super_admin_id, now()
+        );
+        RAISE EXCEPTION 'SCENARIO 12A FAILED: Direct insert with non-after-photo evidence should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%must have evidence_stage authority_after%' THEN
+            RAISE EXCEPTION 'SCENARIO 12A FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 12A PASSED: Direct insert with invalid evidence stage rejected by guard_resolution_submission.';
+    END;
+
+    -- Sub-scenario 12B: Attempt to directly insert pre-approved submission without super-admin reviewer provenance
+    BEGIN
+        INSERT INTO public.resolution_submissions (
+            spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status,
+            reviewed_by, reviewed_at
+        ) VALUES (
+            v_test_spot_id, v_authority_a_id, 'Adversarial submission', v_valid_ev_id, 'approved',
+            v_authority_a_id, now()
+        );
+        RAISE EXCEPTION 'SCENARIO 12B FAILED: Direct insert with non-admin reviewer should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%is not an active super administrator%' THEN
+            RAISE EXCEPTION 'SCENARIO 12B FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 12B PASSED: Direct insert with non-admin reviewer provenance rejected.';
+    END;
+
+    -- Sub-scenario 12C: Create legitimate pending submission, then attempt direct SQL UPDATE of review_status to approved
+    INSERT INTO public.resolution_submissions (
+        spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status
+    ) VALUES (
+        v_test_spot_id, v_authority_a_id, 'Pending repair submission', v_valid_ev_id, 'pending'
+    ) RETURNING id INTO v_sub_id;
+
+    BEGIN
+        UPDATE public.resolution_submissions
+        SET review_status = 'approved', reviewed_by = v_super_admin_id, reviewed_at = now()
+        WHERE id = v_sub_id;
+        RAISE EXCEPTION 'SCENARIO 12C FAILED: Direct UPDATE of review_status should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%Direct modification of review_status forbidden%' THEN
+            RAISE EXCEPTION 'SCENARIO 12C FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 12C PASSED: Direct SQL mutation of review_status bypassing review_resolution_request rejected.';
+    END;
+
+    -- Sub-scenario 12D: Attempt direct UPDATE of spot to RESOLVED while submission is pending
+    BEGIN
+        UPDATE public.spots SET status = 'RESOLVED', resolved_at = now() WHERE id = v_test_spot_id;
+        RAISE EXCEPTION 'SCENARIO 12D FAILED: Direct spot resolution with pending submission should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%lacks an approved resolution submission%' THEN
+            RAISE EXCEPTION 'SCENARIO 12D FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 12D PASSED: Direct spot transition to RESOLVED without approved submission rejected by guard_spot_resolution.';
+    END;
+
+    -- Sub-scenario 12E: Legitimate review_resolution_request execution succeeds and sets RESOLVED
+    PERFORM public.review_resolution_request(
+        v_sub_id,
+        v_super_admin_id,
+        'approved',
+        'Super admin verified after-photo repair evidence'
+    );
+
+    SELECT * INTO v_spot FROM public.spots WHERE id = v_test_spot_id;
+    IF v_spot.status != 'RESOLVED' OR v_spot.resolved_at IS NULL THEN
+        RAISE EXCEPTION 'SCENARIO 12E FAILED: Spot status was not transitioned to RESOLVED by legitimate workflow!';
+    END IF;
+    RAISE NOTICE 'SCENARIO 12E PASSED: Legitimate review_resolution_request successfully transitioned spot to RESOLVED.';
+
+    -- Sub-scenario 12F: Attempt to tamper with submission after it has been reviewed
+    BEGIN
+        UPDATE public.resolution_submissions
+        SET completion_note = 'Tampered after approval'
+        WHERE id = v_sub_id;
+        RAISE EXCEPTION 'SCENARIO 12F FAILED: Mutating already reviewed submission should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%Cannot modify resolution submission%' THEN
+            RAISE EXCEPTION 'SCENARIO 12F FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 12F PASSED: Tampering with reviewed resolution submission rejected by immutability guard.';
+    END;
+
+END;
+$$;
+
 RESET ROLE;
 
 DO $$
 BEGIN
     RAISE NOTICE '=======================================================';
-    RAISE NOTICE 'ALL 11 PHASE 4D REMEDIATION SCENARIOS VERIFIED SUCCESSFULLY!';
+    RAISE NOTICE 'ALL 12 PHASE 4D REMEDIATION SCENARIOS VERIFIED SUCCESSFULLY!';
     RAISE NOTICE '=======================================================';
 END;
 $$;
