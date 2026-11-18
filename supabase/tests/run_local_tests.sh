@@ -102,6 +102,9 @@ echo "Applying Migration 9: Resolution Provenance & Evidence Hardening..."
 echo "Applying Migration 10: Resolution Call Stack & Service-Role Hardening..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000010_resolution_call_stack_and_service_role_hardening.sql > /dev/null
 
+echo "Applying Migration 11: Exact Call Stack & Schema Qualification Hardening..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000011_exact_call_stack_and_schema_qualification.sql > /dev/null
+
 echo "Applying Authoritative Seed Dataset..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/seed.sql > /dev/null
 
@@ -177,7 +180,7 @@ echo "CONCURRENCY TEST VERIFIED: Exactly 1 valid relationship survived with zero
 echo "Executing Phase 4D Database Security & Workflow Invariant Remediation Scenarios..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/phase_04d_remediation_test.sql
 
-echo "Executing Phase 4D Citizen Challenge Concurrency Test..."
+echo "Executing Phase 4D Deterministic Citizen Challenge Concurrency Test (Proving Row-Lock Wait)..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -c "
 INSERT INTO public.citizen_contacts (
     id, telegram_user_hash, encrypted_chat_id, language
@@ -186,65 +189,94 @@ INSERT INTO public.citizen_contacts (
 ) ON CONFLICT (id) DO NOTHING;
 " > /dev/null
 
-CHAL_LOG_1="$TEMP_DIR/chal1.log"
-CHAL_LOG_2="$TEMP_DIR/chal2.log"
+FIFO_1="$TEMP_DIR/fifo_s1"
+mkfifo "$FIFO_1"
 
-"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 << 'EOF' > "$CHAL_LOG_1" 2>&1 &
-SET ROLE authenticated;
-SET request.jwt.claim.role = 'authenticated';
-SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
-SELECT pg_sleep(0.01);
+# Step 1: Session 1 starts transaction, calls create_citizen_challenge, acquires row lock
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 < "$FIFO_1" > "$TEMP_DIR/chal1.log" 2>&1 &
+CHAL_PID_1=$!
+
+exec 3> "$FIFO_1"
+cat << 'EOF' >&3
+SET request.jwt.claim.role = 'service_role';
+BEGIN;
 SELECT public.create_citizen_challenge(
-    'c0000000-0000-0000-0000-000000000081',
-    'f0000000-0000-0000-0000-000000000003',
+    'c0000000-0000-0000-0000-000000000081'::uuid,
+    'f0000000-0000-0000-0000-000000000003'::uuid,
     'still_not_fixed',
     'Concurrent challenge session 1'
 );
 EOF
-CHAL_PID_1=$!
 
-"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 << 'EOF' > "$CHAL_LOG_2" 2>&1 &
-SET ROLE authenticated;
-SET request.jwt.claim.role = 'authenticated';
-SET request.jwt.claim.sub = 'a0000000-0000-0000-0000-000000000001';
+sleep 0.5
+
+# Step 2: Session 1 remains open without committing.
+# Step 3: Session 2 attempts the same challenge
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 << 'EOF' > "$TEMP_DIR/chal2.log" 2>&1 &
+SET request.jwt.claim.role = 'service_role';
 SELECT public.create_citizen_challenge(
-    'c0000000-0000-0000-0000-000000000081',
-    'f0000000-0000-0000-0000-000000000003',
+    'c0000000-0000-0000-0000-000000000081'::uuid,
+    'f0000000-0000-0000-0000-000000000003'::uuid,
     'still_not_fixed',
     'Concurrent challenge session 2'
 );
 EOF
 CHAL_PID_2=$!
 
-set +e
+# Step 4: Harness observes Session 2 waiting on a PostgreSQL lock in pg_stat_activity
+LOCK_OBSERVED=0
+for i in {1..30}; do
+    WAIT_INFO=$("$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -t -c "
+        SELECT wait_event_type || ':' || wait_event
+        FROM pg_stat_activity
+        WHERE wait_event_type = 'Lock'
+          AND query LIKE '%create_citizen_challenge%'
+          AND pid != pg_backend_pid();
+    " 2>/dev/null | tr -d ' ' || true)
+    if [[ "$WAIT_INFO" == Lock:* ]]; then
+        LOCK_OBSERVED=1
+        echo "Observed Session 2 blocked on PostgreSQL lock in pg_stat_activity: $WAIT_INFO"
+        break
+    fi
+    sleep 0.1
+done
+
+if [ "$LOCK_OBSERVED" -ne 1 ]; then
+    echo "CONCURRENCY TEST FAILED: Session 2 was not observed waiting on a PostgreSQL Lock!"
+    echo "CHAL 1 LOG:"
+    cat "$TEMP_DIR/chal1.log" || true
+    echo "CHAL 2 LOG:"
+    cat "$TEMP_DIR/chal2.log" || true
+    exit 1
+fi
+
+# Step 5: Session 1 commits
+echo "COMMIT;" >&3
+exec 3>&-
 wait $CHAL_PID_1
-CHAL_STATUS_1=$?
+
+# Step 6: Session 2 resumes and raises application-level duplicate-challenge exception
+set +e
 wait $CHAL_PID_2
 CHAL_STATUS_2=$?
 set -e
 
-if [ "$CHAL_STATUS_1" -eq 0 ] && [ "$CHAL_STATUS_2" -ne 0 ]; then
-    echo "CHALLENGE CONCURRENCY TEST: Session 1 acquired lock and won; Session 2 was serialized."
-    REJECTED_LOG="$CHAL_LOG_2"
-elif [ "$CHAL_STATUS_2" -eq 0 ] && [ "$CHAL_STATUS_1" -ne 0 ]; then
-    echo "CHALLENGE CONCURRENCY TEST: Session 2 acquired lock and won; Session 1 was serialized."
-    REJECTED_LOG="$CHAL_LOG_1"
-else
-    echo "CHALLENGE CONCURRENCY TEST FAILED: Unexpected status codes: Session 1 ($CHAL_STATUS_1), Session 2 ($CHAL_STATUS_2)"
-    cat "$CHAL_LOG_1" "$CHAL_LOG_2"
+# Step 7: Verify failure was not a unique-index violation
+if [ "$CHAL_STATUS_2" -eq 0 ]; then
+    echo "CONCURRENCY TEST FAILED: Session 2 unexpectedly succeeded!"
     exit 1
 fi
 
-if grep -q "Duplicate challenge: An active challenge from this citizen is already pending review" "$REJECTED_LOG"; then
-    if grep -q "idx_citizen_challenges_active_unique" "$REJECTED_LOG" || grep -q "unique constraint" "$REJECTED_LOG"; then
+if grep -q "Duplicate challenge: An active challenge from this citizen is already pending review" "$TEMP_DIR/chal2.log"; then
+    if grep -q "idx_citizen_challenges_active_unique" "$TEMP_DIR/chal2.log" || grep -q "unique constraint" "$TEMP_DIR/chal2.log"; then
         echo "CHALLENGE CONCURRENCY TEST FAILED: Session crashed on unique index constraint instead of clean row-lock serialization!"
-        cat "$REJECTED_LOG"
+        cat "$TEMP_DIR/chal2.log"
         exit 1
     fi
-    echo "CHALLENGE CONCURRENCY TEST PASSED: Row locking isolated and verified. Rejection occurred via application rate-limit logic, not unhandled constraint crash."
+    echo "DETERMINISTIC CONCURRENCY TEST PASSED: Observed Session 2 lock wait, serialized post-commit, and verified application-level exception with zero constraint crash."
 else
     echo "CHALLENGE CONCURRENCY TEST FAILED: Rejected session did not fail with application lock rate-limit message. Log output:"
-    cat "$REJECTED_LOG"
+    cat "$TEMP_DIR/chal2.log"
     exit 1
 fi
 
@@ -254,6 +286,112 @@ if [ "$ACTIVE_CHAL_COUNT" -ne 1 ]; then
     exit 1
 fi
 echo "CHALLENGE CONCURRENCY VERIFIED: Exactly 1 active challenge created with zero duplicate or race conditions."
+
+# ============================================================================
+# NEGATIVE-CONTROL CONCURRENCY TEST (ROW LOCKS DISABLED)
+# ============================================================================
+echo "Executing Phase 4D Citizen Challenge Negative-Control Concurrency Test (Row Locks Disabled)..."
+
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -c "
+CREATE OR REPLACE FUNCTION public.create_citizen_challenge_no_locks(
+    p_spot_id uuid,
+    p_citizen_contact_id uuid,
+    p_challenge_type text,
+    p_citizen_note text default null
+)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, public, auth, pg_temp
+AS \$\$
+DECLARE
+    v_spot record;
+    v_contact record;
+    v_challenge_id uuid;
+    v_spam_exists boolean;
+BEGIN
+    SELECT * INTO v_spot FROM public.spots WHERE id = p_spot_id;
+    SELECT * INTO v_contact FROM public.citizen_contacts WHERE id = p_citizen_contact_id;
+
+    SELECT EXISTS (
+        SELECT 1 FROM public.citizen_challenges
+        WHERE spot_id = p_spot_id
+          AND citizen_contact_id = p_citizen_contact_id
+          AND status IN ('new', 'under_review')
+          AND created_at > (now() - interval '24 hours')
+    ) INTO v_spam_exists;
+
+    IF v_spam_exists THEN
+        RAISE EXCEPTION 'Duplicate challenge: An active challenge from this citizen is already pending review';
+    END IF;
+
+    PERFORM pg_sleep(0.5);
+
+    INSERT INTO public.citizen_challenges (
+        spot_id, citizen_contact_id, challenge_type, note, status
+    ) VALUES (
+        p_spot_id, p_citizen_contact_id, p_challenge_type, p_citizen_note, 'new'
+    ) RETURNING id INTO v_challenge_id;
+
+    RETURN v_challenge_id;
+END;
+\$\$;
+" > /dev/null
+
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -c "
+INSERT INTO public.citizen_contacts (
+    id, telegram_user_hash, encrypted_chat_id, language
+) VALUES (
+    'f0000000-0000-0000-0000-000000000004', 'synthetic_hash_444444', 'synthetic_chat_444444', 'en'
+) ON CONFLICT (id) DO NOTHING;
+" > /dev/null
+
+FIFO_NEG="$TEMP_DIR/fifo_neg"
+mkfifo "$FIFO_NEG"
+
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 < "$FIFO_NEG" > "$TEMP_DIR/neg1.log" 2>&1 &
+PID_NEG_S1=$!
+
+exec 4> "$FIFO_NEG"
+cat << 'EOF' >&4
+SET request.jwt.claim.role = 'service_role';
+BEGIN;
+SELECT public.create_citizen_challenge_no_locks(
+    'c0000000-0000-0000-0000-000000000081'::uuid,
+    'f0000000-0000-0000-0000-000000000004'::uuid,
+    'still_not_fixed',
+    'Session 1 negative control'
+);
+EOF
+
+sleep 0.7
+
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -v ON_ERROR_STOP=1 << 'EOF' > "$TEMP_DIR/neg2.log" 2>&1 &
+SET request.jwt.claim.role = 'service_role';
+SELECT public.create_citizen_challenge_no_locks(
+    'c0000000-0000-0000-0000-000000000081'::uuid,
+    'f0000000-0000-0000-0000-000000000004'::uuid,
+    'still_not_fixed',
+    'Session 2 negative control'
+);
+EOF
+PID_NEG_S2=$!
+
+sleep 0.7
+
+echo "COMMIT;" >&4
+exec 4>&-
+wait $PID_NEG_S1
+
+set +e
+wait $PID_NEG_S2
+set -e
+
+if grep -q "idx_citizen_challenges_active_unique" "$TEMP_DIR/neg2.log" || grep -q "unique constraint" "$TEMP_DIR/neg2.log"; then
+    echo "NEGATIVE-CONTROL CONCURRENCY TEST PASSED: Confirmed that without row locking, unhandled unique constraint collision occurs."
+else
+    echo "NEGATIVE-CONTROL CONCURRENCY TEST FAILED: Expected unique constraint violation when row locks are disabled, but got:"
+    cat "$TEMP_DIR/neg2.log"
+    exit 1
+fi
 
 echo "Executing Phase 4C Input Validation & Access Control Unit Tests..."
 node --experimental-strip-types src/lib/workflow/__tests__/phase_04c_validation.test.ts

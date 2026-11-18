@@ -638,7 +638,7 @@ BEGIN
         UPDATE public.spots SET status = 'RESOLVED', resolved_at = now() WHERE id = v_test_spot_id;
         RAISE EXCEPTION 'SCENARIO 12D FAILED: Direct spot resolution via SQL should have been blocked!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM NOT LIKE '%Spots can only be transitioned to RESOLVED via review_resolution_request%' AND SQLERRM NOT LIKE '%service_role cannot resolve spots%' THEN
+        IF SQLERRM NOT LIKE '%Spots can only be transitioned to RESOLVED%' AND SQLERRM NOT LIKE '%service_role cannot resolve spots%' THEN
             RAISE EXCEPTION 'SCENARIO 12D FAILED: Unexpected error message: %', SQLERRM;
         END IF;
         RAISE NOTICE 'SCENARIO 12D PASSED: Direct spot transition to RESOLVED rejected by guard_spot_resolution call stack check.';
@@ -678,10 +678,232 @@ $$;
 
 RESET ROLE;
 
+-- ============================================================================
+-- SCENARIO 13: PHASE 4D FINAL ACCEPTANCE GATE AUDIT
+-- Authority: Exact PG_CONTEXT Caller Identity & Service-Role Boundary Regression
+-- ============================================================================
+DO $$
+DECLARE
+    v_test_spot_id uuid := 'c0000000-0000-0000-0000-000000000085';
+    v_super_admin_id uuid := 'a0000000-0000-0000-0000-000000000001';
+    v_authority_a_id uuid := 'a0000000-0000-0000-0000-000000000002';
+    v_org_a_id uuid := 'b0000000-0000-0000-0000-000000000001';
+    v_after_photo_id uuid := 'e1000000-0000-0000-0000-000000000085';
+    v_sub_id uuid := 'c1000000-0000-0000-0000-000000000085';
+    v_spot record;
+BEGIN
+    RAISE NOTICE '-------------------------------------------------------';
+    RAISE NOTICE 'SCENARIO 13: EXACT PG_CONTEXT CALLER IDENTITY & SERVICE-ROLE REGRESSION';
+    RAISE NOTICE '-------------------------------------------------------';
+
+    -- Initialize fixture Spot 85 in RESOLUTION_SUBMITTED status
+    INSERT INTO public.spots (
+        id, spot_code, pilot_id, group_id, category_id, issue_type_id,
+        canonical_latitude, canonical_longitude, anchor_accuracy_m, status,
+        assigned_organisation_id, public_approved, is_demo
+    ) VALUES (
+        v_test_spot_id, 'SPT-KHR-000985', 'kharghar_itm_v1',
+        'utilities_lighting_greenery', 'water_supply_public_taps', 'water_pipeline_leakage',
+        19.0475500, 73.0699800, 4.0, 'RESOLUTION_SUBMITTED',
+        v_org_a_id, true, false
+    ) ON CONFLICT (id) DO UPDATE SET status = 'RESOLUTION_SUBMITTED', resolved_at = null;
+
+    -- Valid after-repair photographic evidence
+    INSERT INTO public.evidence (
+        id, spot_id, evidence_stage, storage_path_private, file_size_bytes, mime_type, sha256
+    ) VALUES (
+        v_after_photo_id, v_test_spot_id, 'authority_after',
+        'evidence-private/spots/SPT-KHR-000985/after_repair.jpg',
+        1048576, 'image/jpeg', '8585858585858585858585858585858585858585858585858585858585858585'
+    ) ON CONFLICT (id) DO NOTHING;
+
+    -- Valid pending resolution submission
+    INSERT INTO public.resolution_submissions (
+        id, spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status
+    ) VALUES (
+        v_sub_id, v_test_spot_id, v_authority_a_id,
+        'Repair completed at Spot 85.', v_after_photo_id, 'pending'
+    ) ON CONFLICT (id) DO UPDATE SET review_status = 'pending', reviewed_by = null, reviewed_at = null;
+
+    -- ------------------------------------------------------------------------
+    -- 1. Exact PG_CONTEXT Caller Identity Adversarial Tests
+    -- ------------------------------------------------------------------------
+
+    -- Sub-scenario 13A: Function in pg_temp with substring in name attempts to update review_status
+    BEGIN
+        PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+        PERFORM set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
+
+        -- Create attacker-controlled temp function with substring match
+        EXECUTE $fn$
+            CREATE OR REPLACE FUNCTION pg_temp.fake_review_resolution_request_sub(p_sub_id uuid)
+            RETURNS void LANGUAGE plpgsql AS $$
+            BEGIN
+                UPDATE public.resolution_submissions
+                SET review_status = 'approved',
+                    reviewed_by = 'a0000000-0000-0000-0000-000000000001',
+                    reviewed_at = now()
+                WHERE id = p_sub_id;
+            END;
+            $$;
+        $fn$;
+
+        -- Invoke attacker temp function
+        EXECUTE 'SELECT pg_temp.fake_review_resolution_request_sub($1)' USING v_sub_id;
+        RAISE EXCEPTION 'SCENARIO 13A FAILED: Temp function substring bypass should have been rejected!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%Direct modification of review_status forbidden%' THEN
+            RAISE EXCEPTION 'SCENARIO 13A FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 13A PASSED: Caller-controlled temp function with substring name rejected by exact call stack guard.';
+    END;
+
+    -- Sub-scenario 13B: Function in pg_temp with exact signature attempts to transition Spot to RESOLVED
+    BEGIN
+        PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+        PERFORM set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
+
+        -- Create attacker-controlled temp function with identical signature
+        EXECUTE $fn$
+            CREATE OR REPLACE FUNCTION pg_temp.review_resolution_request(p_sub_id uuid, p_rev_by uuid, p_dec text, p_note text)
+            RETURNS void LANGUAGE plpgsql AS $$
+            BEGIN
+                UPDATE public.spots SET status = 'RESOLVED' WHERE id = 'c0000000-0000-0000-0000-000000000085';
+            END;
+            $$;
+        $fn$;
+
+        -- Invoke attacker temp function
+        EXECUTE 'SELECT pg_temp.review_resolution_request($1, $2, $3, $4)'
+            USING v_sub_id, v_super_admin_id, 'approved', 'fake note';
+        RAISE EXCEPTION 'SCENARIO 13B FAILED: Temp function with matching signature should have been rejected!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%Illegal resolution: Spots can only be transitioned to RESOLVED via public.review_resolution_request%' THEN
+            RAISE EXCEPTION 'SCENARIO 13B FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 13B PASSED: Caller-controlled temp function with identical signature rejected by schema-qualified call stack guard.';
+    END;
+
+    -- ------------------------------------------------------------------------
+    -- 2. Service-Role Boundary Regression Tests
+    -- ------------------------------------------------------------------------
+
+    -- Sub-scenario 13C: service_role cannot insert a pre-approved resolution submission
+    BEGIN
+        PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+        PERFORM set_config('request.jwt.claim.sub', '', true);
+
+        INSERT INTO public.resolution_submissions (
+            spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status, reviewed_by, reviewed_at
+        ) VALUES (
+            v_test_spot_id, v_authority_a_id, 'Unauthorized pre-approved insert',
+            v_after_photo_id, 'approved', v_super_admin_id, now()
+        );
+        RAISE EXCEPTION 'SCENARIO 13C FAILED: service_role insert of approved submission should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%Resolution submissions must be inserted in pending status%' THEN
+            RAISE EXCEPTION 'SCENARIO 13C FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 13C PASSED: service_role insert of pre-approved resolution submission cleanly rejected.';
+    END;
+
+    -- Sub-scenario 13D: service_role cannot update a pending submission to approved
+    BEGIN
+        PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+        PERFORM set_config('request.jwt.claim.sub', '', true);
+
+        UPDATE public.resolution_submissions
+        SET review_status = 'approved',
+            reviewed_by = v_super_admin_id,
+            reviewed_at = now()
+        WHERE id = v_sub_id;
+        RAISE EXCEPTION 'SCENARIO 13D FAILED: service_role update of review_status should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%Direct modification of review_status forbidden%' THEN
+            RAISE EXCEPTION 'SCENARIO 13D FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 13D PASSED: service_role direct update of review_status cleanly rejected.';
+    END;
+
+    -- Sub-scenario 13E: service_role cannot call review_resolution_request
+    BEGIN
+        PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+        PERFORM set_config('request.jwt.claim.sub', '', true);
+
+        PERFORM public.review_resolution_request(
+            v_sub_id,
+            v_super_admin_id,
+            'approved',
+            'Service role attempt'
+        );
+        RAISE EXCEPTION 'SCENARIO 13E FAILED: service_role calling review_resolution_request should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%service_role cannot review resolution%' AND SQLERRM NOT LIKE '%permission denied%' THEN
+            RAISE EXCEPTION 'SCENARIO 13E FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 13E PASSED: service_role execution of review_resolution_request cleanly rejected.';
+    END;
+
+    -- Sub-scenario 13F: service_role cannot directly transition Spot to RESOLVED
+    BEGIN
+        PERFORM set_config('request.jwt.claim.role', 'service_role', true);
+        PERFORM set_config('request.jwt.claim.sub', '', true);
+
+        UPDATE public.spots SET status = 'RESOLVED' WHERE id = v_test_spot_id;
+        RAISE EXCEPTION 'SCENARIO 13F FAILED: service_role directly transitioning Spot to RESOLVED should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%service_role cannot resolve spots%' THEN
+            RAISE EXCEPTION 'SCENARIO 13F FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 13F PASSED: service_role direct Spot transition to RESOLVED cleanly rejected.';
+    END;
+
+    -- Sub-scenario 13G: Caller cannot manufacture reviewer identity by supplying active super-admin UUID
+    BEGIN
+        -- Authenticated non-admin (e.g. Authority A user) attempts to review with super-admin UUID
+        PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+        PERFORM set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000002', true); -- authority_a_user_id
+
+        PERFORM public.review_resolution_request(
+            v_sub_id,
+            v_super_admin_id, -- attempt to spoof super-admin
+            'approved',
+            'Manufactured reviewer identity attempt'
+        );
+        RAISE EXCEPTION 'SCENARIO 13G FAILED: Non-superadmin manufacturing reviewer identity should have been blocked!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%Only super administrators can review resolution%' AND SQLERRM NOT LIKE '%Reviewer user ID does not match authenticated identity%' THEN
+            RAISE EXCEPTION 'SCENARIO 13G FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 13G PASSED: Manufacturing reviewer identity with active super-admin UUID cleanly rejected.';
+    END;
+
+    -- Sub-scenario 13H: Legitimate authenticated active super-admin workflow succeeds
+    PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+    PERFORM set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
+
+    PERFORM public.review_resolution_request(
+        v_sub_id,
+        v_super_admin_id,
+        'approved',
+        'Legitimate super-admin review approved with verified after-photo'
+    );
+
+    SELECT * INTO v_spot FROM public.spots WHERE id = v_test_spot_id;
+    IF v_spot.status != 'RESOLVED' OR v_spot.resolved_at IS NULL THEN
+        RAISE EXCEPTION 'SCENARIO 13H FAILED: Spot status was not transitioned to RESOLVED by legitimate super-admin!';
+    END IF;
+    RAISE NOTICE 'SCENARIO 13H PASSED: Authenticated active super-admin successfully approved resolution and transitioned Spot to RESOLVED.';
+
+END;
+$$;
+
+RESET ROLE;
+
 DO $$
 BEGIN
     RAISE NOTICE '=======================================================';
-    RAISE NOTICE 'ALL 12 PHASE 4D REMEDIATION SCENARIOS VERIFIED SUCCESSFULLY!';
+    RAISE NOTICE 'ALL 13 PHASE 4D REMEDIATION SCENARIOS VERIFIED SUCCESSFULLY!';
     RAISE NOTICE '=======================================================';
 END;
 $$;
