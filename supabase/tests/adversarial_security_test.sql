@@ -442,25 +442,32 @@ BEGIN
         UPDATE public.spots SET status = 'RESOLVED' WHERE id = v_spot_a_id;
         RAISE EXCEPTION 'ADVERSARIAL TEST 6 FAILED: Direct ASSIGNED -> RESOLVED bypass succeeded for service_role!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM LIKE '%Illegal resolution: Spot % can only be transitioned to RESOLVED from RESOLUTION_SUBMITTED state%' THEN
+        IF SQLERRM LIKE '%service_role cannot resolve spots%' OR SQLERRM LIKE '%Illegal resolution: Spot % can only be transitioned to RESOLVED from RESOLUTION_SUBMITTED state%' THEN
             RAISE NOTICE 'ADVERSARIAL TEST 6A PASSED: Direct transition from ASSIGNED to RESOLVED blocked by trigger guard for service_role.';
         ELSE
             RAISE EXCEPTION 'ADVERSARIAL TEST 6 FAILED: Unexpected error on direct resolution attempt: %', SQLERRM;
         END IF;
     END;
 
-    -- 2. Legitimate workflow: Transition to RESOLUTION_SUBMITTED with approved submission and after-photo evidence
+    -- 2. Legitimate workflow: Transition to RESOLUTION_SUBMITTED with submission and after-photo evidence, approved via review_resolution_request
     UPDATE public.spots SET status = 'RESOLUTION_SUBMITTED' WHERE id = v_spot_a_id;
 
     INSERT INTO public.resolution_submissions (
-        spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status, reviewed_by, reviewed_at
+        spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status
     ) VALUES (
         v_spot_a_id, 'a0000000-0000-0000-0000-000000000002', 'Repairs completed by field team',
-        v_evidence_id, 'approved', 'a0000000-0000-0000-0000-000000000001', now()
+        v_evidence_id, 'pending'
     ) RETURNING id INTO v_submission_id;
 
-    -- Now transition to RESOLVED succeeds
-    UPDATE public.spots SET status = 'RESOLVED' WHERE id = v_spot_a_id;
+    -- Now super-admin review workflow transitions spot to RESOLVED
+    PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+    PERFORM set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
+    PERFORM public.review_resolution_request(
+        v_submission_id,
+        'a0000000-0000-0000-0000-000000000001',
+        'approved',
+        'Super admin verified repair'
+    );
 
     SELECT status, resolved_at INTO v_status, v_resolved_at
     FROM public.spots WHERE id = v_spot_a_id;

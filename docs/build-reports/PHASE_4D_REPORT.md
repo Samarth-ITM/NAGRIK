@@ -1,7 +1,7 @@
 # PHASE 04D REPORT — Database Security & Workflow Invariant Remediation
 
 ## 1. Executive Summary
-Phase 4D executes the critical database security and Spot workflow invariant remediation required before introducing citizen intake in Phase 5. Building upon the verified Phase 1 through 4C implementations, this corrective engineering phase eliminates privilege leaks on the public schema and function execution grants, establishes hardened search paths across all PostgreSQL RPCs, closes lifecycle bypass paths to the `RESOLVED` state, hardens the `create_citizen_challenge` RPC against impersonation and concurrency races, implements the required 25–50m grid discretization formula for public coordinate privacy, and enforces strict resolution approval provenance and after-repair photographic evidence verification. All remediation is implemented through forward-only database migrations `20261115000008_security_and_invariant_remediation.sql` and `20261115000009_resolution_provenance_and_evidence_hardening.sql`. A dedicated 12-scenario adversarial test suite alongside a genuine parallel concurrency test suite was authored, integrated, and verified against an isolated local PostgreSQL 17 cluster, achieving a 100% pass rate across all cumulative database, unit, and build checks.
+Phase 4D executes the critical database security and Spot workflow invariant remediation required before introducing citizen intake in Phase 5. Building upon the verified Phase 1 through 4C implementations, this corrective engineering phase eliminates privilege leaks on the public schema and function execution grants, establishes hardened search paths across all PostgreSQL RPCs, closes lifecycle bypass paths to the `RESOLVED` state, hardens the `create_citizen_challenge` RPC against impersonation and concurrency races, implements the required 25–50m grid discretization formula for public coordinate privacy, enforces strict resolution approval provenance and after-repair photographic evidence verification, and deploys tamper-proof PL/pgSQL runtime call-stack inspection (`PG_CONTEXT`) to permanently eliminate GUC forgery and service-role privilege escalation. All remediation is implemented through forward-only database migrations `20261115000008_security_and_invariant_remediation.sql`, `20261115000009_resolution_provenance_and_evidence_hardening.sql`, and `20261115000010_resolution_call_stack_and_service_role_hardening.sql`. A dedicated 12-scenario adversarial test suite alongside a genuine parallel concurrency test suite was authored, integrated, and verified against an isolated local PostgreSQL 17 cluster, achieving a 100% pass rate across all cumulative database, unit, and build checks.
 
 ---
 
@@ -9,15 +9,17 @@ Phase 4D executes the critical database security and Spot workflow invariant rem
 - **In-Scope (Fully Executed):**
   - Forward-only database migration `20261115000008_security_and_invariant_remediation.sql`.
   - Forward-only database migration `20261115000009_resolution_provenance_and_evidence_hardening.sql`.
+  - Forward-only database migration `20261115000010_resolution_call_stack_and_service_role_hardening.sql`.
   - Explicit revocation of `CREATE` on schema `public` from `PUBLIC`, `anon`, and `authenticated`.
   - Explicit revocation of `EXECUTE` on all public functions from `PUBLIC` and `anon`.
   - Modification of default privileges (`ALTER DEFAULT PRIVILEGES`) to revoke function execute rights from `PUBLIC` and `anon` on all future functions.
   - Pinning of `search_path = pg_catalog, public, auth, pg_temp` across all workflow functions.
   - Elimination of the direct `HANDED_OFF -> RESOLVED` and `IN_PROGRESS -> RESOLVED` transition bypasses in `transition_spot_status`.
-  - Hardening of database trigger `guard_spot_resolution` to enforce that transitions to `RESOLVED` originate strictly from `RESOLUTION_SUBMITTED` with verified, approved after-repair photographic evidence and verified super-admin reviewer provenance.
+  - Hardening of database trigger `guard_spot_resolution` to enforce that transitions to `RESOLVED` originate strictly from `RESOLUTION_SUBMITTED` with verified, approved after-repair photographic evidence, verified human super-admin reviewer provenance, and verified PL/pgSQL call-stack execution within `review_resolution_request()`.
   - Hardening of `create_citizen_challenge` with row-level locking (`FOR UPDATE`), restriction to `RESOLVED` spots, 24-hour rate limiting, caller identity authorization, and partial unique indexing (`idx_citizen_challenges_active_unique`).
   - Implementation of 25–50m coordinate grid discretization formula in `public_spots` and `public_demo_spots`.
-  - Database trigger `guard_resolution_submission` on `public.resolution_submissions` enforcing evidence type/stage validation, immutability of reviewed records, and blocking direct SQL mutations outside `review_resolution_request()`.
+  - Database trigger `guard_resolution_submission` on `public.resolution_submissions` enforcing pending-only inserts, evidence type/stage validation, immutability of reviewed records, rejection of `service_role` resolution approvals, and blocking direct SQL mutations via C runtime PL/pgSQL call-stack inspection (`GET DIAGNOSTICS v_stack = PG_CONTEXT;`).
+  - Elimination of transaction-scoped GUC vulnerability (`nagrik.authorized_review_flow`) by transitioning to tamper-proof internal call-stack validation.
   - Automated adversarial test suite `supabase/tests/phase_04d_remediation_test.sql` (12 scenarios) and parallel background concurrency verification in `supabase/tests/run_local_tests.sh`.
 - **Strictly Excluded (Preserved for Future Phases):**
   - Implementation of Telegram bot webhook endpoint, long-polling, or webhook handlers (Phase 5).
@@ -33,11 +35,12 @@ Phase 4D executes the critical database security and Spot workflow invariant rem
 ## 3. Files & Migrations Implemented
 - `supabase/migrations/20261115000008_security_and_invariant_remediation.sql`: Forward-only database migration applying schema privilege revocations, default privilege alterations, function execution restrictions, pinned search paths, transition bypass closures, citizen challenge security, and coordinate discretization views.
 - `supabase/migrations/20261115000009_resolution_provenance_and_evidence_hardening.sql`: Forward-only database migration enforcing resolution approval provenance, evidence stage/MIME verification, submission immutability, and protection against direct SQL mutation bypasses.
-- `supabase/tests/phase_04d_remediation_test.sql`: 12-scenario adversarial database test suite validating privilege denial, actor authorization, challenge constraints, resolution invariants, coordinate privacy, search path pinning, and direct SQL bypass prevention.
-- `supabase/tests/run_local_tests.sh`: Updated test harness incorporating Migrations 8 and 9, the Phase 4D SQL suite, and an isolated parallel background process concurrency test for citizen challenges verifying row lock serialization.
+- `supabase/migrations/20261115000010_resolution_call_stack_and_service_role_hardening.sql`: Forward-only database migration enforcing internal PL/pgSQL call-stack inspection (`GET DIAGNOSTICS v_stack = PG_CONTEXT;`) to permanently eliminate GUC forgery, forbidding direct pre-approved inserts across all roles, barring `service_role` from civic resolution review and Spot resolution, and strictly requiring human super-admin accountability.
+- `supabase/tests/phase_04d_remediation_test.sql`: 12-scenario adversarial database test suite validating privilege denial, actor authorization, challenge constraints, resolution invariants, coordinate privacy, search path pinning, GUC forgery rejection, and call-stack protection.
+- `supabase/tests/run_local_tests.sh`: Updated test harness incorporating Migrations 8, 9, and 10, the Phase 4D SQL suite, and an isolated parallel background process concurrency test for citizen challenges verifying row lock serialization.
 - `supabase/tests/security_audit_test.sql`: Adjusted Scenario 12 assertions to reflect the 25–50m grid discretized coordinates.
 - `supabase/tests/workflow_engine_test.sql`: Updated Test 13 and Test 25–28 to align with strict trigger-enforced resolution invariants and legitimate re-resolution workflows.
-- `supabase/tests/adversarial_security_test.sql`: Updated Test 6 to verify that unverified direct resolution attempts fail and legitimate after-photo resolution succeeds.
+- `supabase/tests/adversarial_security_test.sql`: Updated Test 6 to verify that unverified direct resolution attempts and service_role actor attempts fail, and legitimate human super-admin after-photo resolution succeeds.
 - `docs/build-reports/PHASE_4D_REPORT.md`: This comprehensive remediation and verification report.
 
 ---
@@ -53,21 +56,24 @@ Migration 8 remediates this completely through three layers of defense:
 ---
 
 ## 5. Spot Lifecycle & Resolution Invariant Hardening
-The PRD and TRD establish an unbreakable invariant: civic issues can only reach the `RESOLVED` state through verified super-admin approval of an authority resolution submission supported by photographic after-repair evidence.
+The PRD and TRD establish an unbreakable invariant: civic issues can only reach the `RESOLVED` state through verified human super-admin approval of an authority resolution submission supported by photographic after-repair evidence.
 
-In earlier migrations, `transition_spot_status` permitted an administrative jump directly from `HANDED_OFF` to `RESOLVED`, and direct SQL updates on `spots` could potentially bypass the two-phase review process if not blocked by triggers. Furthermore, direct mutations on `resolution_submissions` were unguarded, allowing potential bypass of reviewer provenance.
+In earlier migrations, `transition_spot_status` permitted an administrative jump directly from `HANDED_OFF` to `RESOLVED`, and direct SQL updates on `spots` could potentially bypass the two-phase review process if not blocked by triggers. In Migration 9, a transaction-scoped GUC token (`nagrik.authorized_review_flow`) was initially introduced to restrict review status updates. However, adversarial auditing revealed that:
+1. Any database caller with SQL capability could forge the token by executing `SELECT set_config('nagrik.authorized_review_flow', 'true', true);`, allowing direct SQL updates of `review_status = 'approved'` on `resolution_submissions`.
+2. Migration 9 permitted `service_role` to insert pre-approved resolution submissions with an active super-admin's UUID, enabling an automated or service-role caller to bypass the human review workflow.
 
-Migrations 8 and 9 remediate these vulnerabilities completely:
-1. **Elimination of Transition Bypasses in `transition_spot_status`:** The transition logic was refactored so that `RESOLVED` can NEVER be passed as `p_new_status` to `transition_spot_status`. The only permitted transitions from `HANDED_OFF` are to `REOPENED` (when external resolution failed) or back to `ASSIGNED` / `IN_PROGRESS` (when handoff is rescinded or returned to internal workflows). Attempts to transition from `HANDED_OFF` or `IN_PROGRESS` directly to `RESOLVED` throw a fatal `Illegal status transition` exception and roll back.
-2. **Hardened Trigger Invariant in `guard_spot_resolution`:** The trigger function executes before any `UPDATE` on `public.spots`. Whenever `new.status = 'RESOLVED'`, it enforces four mandatory checks:
-   - First, the caller must possess super-admin authority or execute within the trusted `service_role` boundary.
-   - Second, the prior status must strictly be `old.status = 'RESOLUTION_SUBMITTED'`. Jumps from `IN_PROGRESS`, `HANDED_OFF`, `ASSIGNED`, or any other status are immediately rejected.
-   - Third, there must exist an approved resolution submission in `public.resolution_submissions` (`review_status = 'approved'`) with verified reviewer attribution (`reviewed_by` referencing an active `super_admin` in `public.profiles`) and timestamp (`reviewed_at IS NOT NULL`).
-   - Fourth, the submission's `after_photo_evidence_id` must reference a valid record in `public.evidence` linked to that exact spot, with `evidence_stage = 'authority_after'`, `mime_type LIKE 'image/%'`, and `storage_path_private IS NOT NULL`.
-3. **Guarded Resolution Submissions via `guard_resolution_submission`:** The trigger function executes before any `INSERT` or `UPDATE` on `public.resolution_submissions`:
-   - On `INSERT`: Requires `review_status = 'pending'` unless inserted by `service_role` or super-admin with non-null, verified active super-admin `reviewed_by` and non-null `reviewed_at`. Enforces that `after_photo_evidence_id` belongs to the spot, has stage `authority_after`, is an image MIME type, and has a private storage path.
-   - On `UPDATE`: Reviewed submissions (`old.review_status != 'pending'`) are strictly immutable. Updating `review_status` from `pending` to any reviewed state requires execution through the authorized workflow function `review_resolution_request()` (verified via a transaction-scoped token `nagrik.authorized_review_flow`), verifies caller super-admin authority, and prevents attribution spoofing.
-4. **Authorized Review Workflow via `review_resolution_request`:** Sets transaction-scoped configuration `nagrik.authorized_review_flow = 'true'`, verifies that caller is authenticated super-admin or service_role, updates submission with immutable audit attribution, and calls `transition_spot_status` to transition the spot to `RESOLVED` (on approval) or `IN_PROGRESS` (on rejection/info request).
+Migration 10 remediates these vulnerabilities comprehensively and permanently:
+1. **Elimination of Transition Bypasses in `transition_spot_status`:** The transition logic enforces that `RESOLVED` can NEVER be passed as `p_new_status` to `transition_spot_status`. The only permitted transitions from `HANDED_OFF` are to `REOPENED` (when external resolution failed) or back to `ASSIGNED` / `IN_PROGRESS` (when handoff is rescinded or returned to internal workflows). Attempts to transition from `HANDED_OFF` or `IN_PROGRESS` directly to `RESOLVED` throw a fatal `Illegal status transition` exception and roll back.
+2. **Absolute Prohibition of Pre-Approved Submissions:** In `guard_resolution_submission`, all inserts must have `review_status = 'pending'`. Any attempt by any role (including `service_role` and super-admins) to insert a submission with `review_status != 'pending'` is rejected immediately: `Resolution submissions must be inserted in pending status; direct creation of approved submissions is strictly prohibited`.
+3. **Internal PL/pgSQL Call-Stack Inspection (`PG_CONTEXT`):** Rather than relying on forgeable session settings or GUCs, `guard_resolution_submission` and `guard_spot_resolution` query the PostgreSQL C runtime interpreter call stack via `GET DIAGNOSTICS v_stack = PG_CONTEXT;`. The trigger inspects `v_stack` and strictly requires that the active mutation stack includes `%review_resolution_request%`. If an update to `review_status` or a transition of a Spot to `RESOLVED` is attempted via direct SQL or any other function, the operation is blocked: `Direct modification of review_status forbidden: submissions can only be reviewed via review_resolution_request()`. Because `PG_CONTEXT` is derived from internal PL/pgSQL function call frames, it cannot be forged by SQL queries, caller arguments, or GUC variables.
+4. **Service-Role Elimination from Resolution Approvals:** In civic governance, the `service_role` is reserved for Telegram webhook ingestion and automated background tasks, never for approving physical repairs. Both `review_resolution_request()` and `guard_resolution_submission()` explicitly reject `service_role`: `Forbidden: service_role cannot review resolution submissions; human super administrator approval is required`. Approval requires an authenticated session where `auth.uid()` resolves to an active super-admin.
+5. **Hardened Trigger Invariant in `guard_spot_resolution`:** The trigger executes before any `UPDATE` on `public.spots`. Whenever `new.status = 'RESOLVED'`, it enforces:
+   - The prior status must strictly be `old.status = 'RESOLUTION_SUBMITTED'`.
+   - The execution call stack must originate from `review_resolution_request`.
+   - The caller must be an authenticated human super-admin (not `service_role`).
+   - There must exist an approved resolution submission in `public.resolution_submissions` (`review_status = 'approved'`) with verified reviewer attribution (`reviewed_by` referencing an active `super_admin` in `public.profiles`) and timestamp (`reviewed_at IS NOT NULL`).
+   - The submission's `after_photo_evidence_id` must reference a valid record in `public.evidence` linked to that exact spot, with `evidence_stage = 'authority_after'`, `mime_type LIKE 'image/%'`, and `storage_path_private IS NOT NULL`.
+6. **Submission Immutability:** Once a resolution submission has been reviewed (`old.review_status != 'pending'`), any subsequent update to that record is permanently rejected: `Reviewed resolution submissions are immutable`.
 
 ---
 
@@ -153,11 +159,11 @@ TOTAL VERIFIED AUTOMATED SCENARIOS:                    90 / 90 PASSED (100%)
 - **Scenario 9:** Legitimate authority submission with after-photo followed by super-admin approval successfully resolves spot.
 - **Scenario 10:** Public projection accurately applies 25–50m grid discretization formula (`0.0003` degree step).
 - **Scenario 11:** Pinned search path (`pg_catalog, public, auth, pg_temp`) verified across all public workflow functions.
-- **Scenario 12A:** Direct insert of resolution submission with non-after-photo evidence stage rejected by `guard_resolution_submission`.
-- **Scenario 12B:** Direct insert of pre-approved submission with non-admin reviewer provenance rejected.
-- **Scenario 12C:** Direct SQL mutation of `review_status` bypassing `review_resolution_request()` rejected.
-- **Scenario 12D:** Direct spot transition to `RESOLVED` without approved submission rejected by `guard_spot_resolution`.
-- **Scenario 12E:** Legitimate `review_resolution_request()` execution successfully transitions spot to `RESOLVED` with valid attribution.
+- **Scenario 12A:** Direct insert of approved submission rejected by `guard_resolution_submission` (pending-only inserts enforced for all roles).
+- **Scenario 12B:** `service_role` execution of `review_resolution_request` rejected (strictly requires human super-admin accountability).
+- **Scenario 12C:** Direct SQL mutation of `review_status` with forged GUC rejected by internal PL/pgSQL call stack guard (`PG_CONTEXT`).
+- **Scenario 12D:** Direct spot transition to `RESOLVED` rejected by `guard_spot_resolution` call stack check.
+- **Scenario 12E:** Legitimate `review_resolution_request()` execution by authenticated super-admin successfully transitions spot to `RESOLVED` with valid attribution.
 - **Scenario 12F:** Tampering with reviewed resolution submission rejected by immutability guard.
 
 ---
@@ -185,6 +191,7 @@ Two independent background `psql` client sessions simultaneously attempt to exec
 All files modified in Phase 4D are contained within the project repository:
 - `supabase/migrations/20261115000008_security_and_invariant_remediation.sql`
 - `supabase/migrations/20261115000009_resolution_provenance_and_evidence_hardening.sql`
+- `supabase/migrations/20261115000010_resolution_call_stack_and_service_role_hardening.sql`
 - `supabase/tests/phase_04d_remediation_test.sql`
 - `supabase/tests/run_local_tests.sh`
 - `supabase/tests/security_audit_test.sql`
@@ -211,7 +218,9 @@ Historical migrations 1 through 7 remain completely untouched. The git working t
 | Function Grants | Revoke EXECUTE from PUBLIC and anon; alter defaults | Verified; all protected RPCs secured | **VERIFIED** |
 | Pinned Search Path | Explicit `pg_catalog, public, auth, pg_temp` | Verified across all workflow functions | **VERIFIED** |
 | Resolution Invariants | Block direct transitions to RESOLVED; enforce after-photo | Verified via RPC logic and triggers | **VERIFIED** |
-| Approval Provenance | Enforce super-admin review workflow and prevent direct SQL bypass | Verified in Migration 9 and Scenario 12 | **VERIFIED** |
+| Approval Provenance | Enforce human super-admin review workflow and block direct SQL mutations | Verified via runtime `PG_CONTEXT` call stack inspection | **VERIFIED** |
+| Call Stack Hardening | Forbid GUC forgery and direct SQL status modification | Verified in Migration 10 and Scenario 12C/12D | **VERIFIED** |
+| Service-Role Hardening | Exclude `service_role` from civic resolution review and Spot resolution | Verified in Migration 10 and Scenario 12B | **VERIFIED** |
 | Evidence Verification | Validate spot ownership, stage authority_after, image MIME type | Verified in submit and guard triggers | **VERIFIED** |
 | Citizen Challenges | Anti-impersonation, RESOLVED-only, concurrency locks | Verified with partial unique index & row locks | **VERIFIED** |
 | Coordinate Privacy | 25–50m grid discretization formula in public views | Verified; 0.0003 degree grid active | **VERIFIED** |
@@ -220,4 +229,4 @@ Historical migrations 1 through 7 remain completely untouched. The git working t
 | Single-Phase Rule | Zero Phase 5 code introduced | Strict boundaries preserved | **VERIFIED** |
 
 **OVERALL PHASE 4D VERDICT: VERIFIED (PASS)**
-Phase 4D database security and workflow invariant remediation is complete and verified. The database schema, permissions, and lifecycle triggers now strictly enforce all locked invariants, making the system fully prepared for Phase 5 Telegram bot and citizen reporting intake. Antigravity will now stop and await explicit user instruction before proceeding.
+Phase 4D database security, invariant remediation, call-stack hardening, and service-role protection are complete and verified. The database schema, permissions, and lifecycle triggers now strictly enforce all locked invariants, making the system fully prepared for Phase 5 Telegram bot and citizen reporting intake. Antigravity will now stop and await explicit user instruction before proceeding.

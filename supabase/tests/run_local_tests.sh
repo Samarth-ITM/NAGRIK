@@ -99,6 +99,9 @@ echo "Applying Migration 8: Security & Invariant Remediation..."
 echo "Applying Migration 9: Resolution Provenance & Evidence Hardening..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000009_resolution_provenance_and_evidence_hardening.sql > /dev/null
 
+echo "Applying Migration 10: Resolution Call Stack & Service-Role Hardening..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000010_resolution_call_stack_and_service_role_hardening.sql > /dev/null
+
 echo "Applying Authoritative Seed Dataset..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/seed.sql > /dev/null
 
@@ -233,6 +236,11 @@ else
 fi
 
 if grep -q "Duplicate challenge: An active challenge from this citizen is already pending review" "$REJECTED_LOG"; then
+    if grep -q "idx_citizen_challenges_active_unique" "$REJECTED_LOG" || grep -q "unique constraint" "$REJECTED_LOG"; then
+        echo "CHALLENGE CONCURRENCY TEST FAILED: Session crashed on unique index constraint instead of clean row-lock serialization!"
+        cat "$REJECTED_LOG"
+        exit 1
+    fi
     echo "CHALLENGE CONCURRENCY TEST PASSED: Row locking isolated and verified. Rejection occurred via application rate-limit logic, not unhandled constraint crash."
 else
     echo "CHALLENGE CONCURRENCY TEST FAILED: Rejected session did not fail with application lock rate-limit message. Log output:"

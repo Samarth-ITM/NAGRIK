@@ -57,20 +57,25 @@ BEGIN
         1048576, 'image/jpeg', '8181818181818181818181818181818181818181818181818181818181818181'
     ) ON CONFLICT (id) DO NOTHING;
 
-    -- Resolution submission for Spot 81 (pre-approved with super-admin provenance)
+    -- Resolution submission for Spot 81
     INSERT INTO public.resolution_submissions (
-        spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status,
-        reviewed_by, reviewed_at
+        id, spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status
     ) VALUES (
-        'c0000000-0000-0000-0000-000000000081', 'a0000000-0000-0000-0000-000000000002',
-        'Pipe repaired and sealed.', 'e1000000-0000-0000-0000-000000000081', 'approved',
-        'a0000000-0000-0000-0000-000000000001', now()
-    ) ON CONFLICT DO NOTHING;
+        'c1000000-0000-0000-0000-000000000081', 'c0000000-0000-0000-0000-000000000081',
+        'a0000000-0000-0000-0000-000000000002', 'Pipe repaired and sealed.',
+        'e1000000-0000-0000-0000-000000000081', 'pending'
+    ) ON CONFLICT (id) DO NOTHING;
 
-    -- Transition Spot 81 to RESOLVED now that approved submission exists
-    UPDATE public.spots
-    SET status = 'RESOLVED', resolved_at = now()
-    WHERE id = 'c0000000-0000-0000-0000-000000000081';
+    -- Transition Spot 81 to RESOLVED via legitimate super-admin review workflow
+    PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+    PERFORM set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
+    PERFORM public.review_resolution_request(
+        'c1000000-0000-0000-0000-000000000081',
+        'a0000000-0000-0000-0000-000000000001',
+        'approved',
+        'Initial fixture resolution approval'
+    );
+    PERFORM set_config('request.jwt.claim.role', 'service_role', true);
 
     -- Spot 82: Assigned to Org A, IN_PROGRESS
     INSERT INTO public.spots (
@@ -388,7 +393,7 @@ BEGIN
         UPDATE public.spots SET status = 'RESOLVED' WHERE id = 'c0000000-0000-0000-0000-000000000082';
         RAISE EXCEPTION 'SCENARIO 8C FAILED: Transition to RESOLVED without approved resolution submission allowed!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM LIKE '%lacks an approved resolution submission with verified after-repair photo evidence%' THEN
+        IF SQLERRM LIKE '%Spots can only be transitioned to RESOLVED via review_resolution_request%' OR SQLERRM LIKE '%lacks an approved resolution submission with verified after-repair photo evidence%' THEN
             RAISE NOTICE 'SCENARIO 8C PASSED: Trigger blocks transition to RESOLVED without approved resolution submission.';
         ELSE
             RAISE EXCEPTION 'SCENARIO 8C FAILED: Unexpected error: %', SQLERRM;
@@ -575,41 +580,24 @@ BEGIN
         1048576, 'image/jpeg', '9292929292929292929292929292929292929292929292929292929292929292'
     ) ON CONFLICT (id) DO NOTHING;
 
-    -- Sub-scenario 12A: Attempt to directly insert pre-approved submission with invalid (non-after-photo) evidence
+    -- Sub-scenario 12A: Attempt to directly insert pre-approved submission (strictly prohibited)
     BEGIN
         INSERT INTO public.resolution_submissions (
             spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status,
             reviewed_by, reviewed_at
         ) VALUES (
-            v_test_spot_id, v_authority_a_id, 'Adversarial submission', v_invalid_ev_id, 'approved',
+            v_test_spot_id, v_authority_a_id, 'Adversarial pre-approved submission', v_valid_ev_id, 'approved',
             v_super_admin_id, now()
         );
-        RAISE EXCEPTION 'SCENARIO 12A FAILED: Direct insert with non-after-photo evidence should have been blocked!';
+        RAISE EXCEPTION 'SCENARIO 12A FAILED: Direct insert of approved submission should have been blocked!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM NOT LIKE '%must have evidence_stage authority_after%' THEN
+        IF SQLERRM NOT LIKE '%Resolution submissions must be inserted in pending status%' THEN
             RAISE EXCEPTION 'SCENARIO 12A FAILED: Unexpected error message: %', SQLERRM;
         END IF;
-        RAISE NOTICE 'SCENARIO 12A PASSED: Direct insert with invalid evidence stage rejected by guard_resolution_submission.';
+        RAISE NOTICE 'SCENARIO 12A PASSED: Direct insert of approved submission rejected by guard_resolution_submission.';
     END;
 
-    -- Sub-scenario 12B: Attempt to directly insert pre-approved submission without super-admin reviewer provenance
-    BEGIN
-        INSERT INTO public.resolution_submissions (
-            spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status,
-            reviewed_by, reviewed_at
-        ) VALUES (
-            v_test_spot_id, v_authority_a_id, 'Adversarial submission', v_valid_ev_id, 'approved',
-            v_authority_a_id, now()
-        );
-        RAISE EXCEPTION 'SCENARIO 12B FAILED: Direct insert with non-admin reviewer should have been blocked!';
-    EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM NOT LIKE '%is not an active super administrator%' THEN
-            RAISE EXCEPTION 'SCENARIO 12B FAILED: Unexpected error message: %', SQLERRM;
-        END IF;
-        RAISE NOTICE 'SCENARIO 12B PASSED: Direct insert with non-admin reviewer provenance rejected.';
-    END;
-
-    -- Sub-scenario 12C: Create legitimate pending submission, then attempt direct SQL UPDATE of review_status to approved
+    -- Sub-scenario 12B: Create legitimate pending submission, then verify service_role CANNOT call review_resolution_request()
     INSERT INTO public.resolution_submissions (
         spot_id, submitted_by, completion_note, after_photo_evidence_id, review_status
     ) VALUES (
@@ -617,29 +605,48 @@ BEGIN
     ) RETURNING id INTO v_sub_id;
 
     BEGIN
+        PERFORM public.review_resolution_request(
+            v_sub_id,
+            v_super_admin_id,
+            'approved',
+            'Service role unauthorized review attempt'
+        );
+        RAISE EXCEPTION 'SCENARIO 12B FAILED: service_role was allowed to execute review_resolution_request!';
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM NOT LIKE '%service_role cannot review resolution requests%' THEN
+            RAISE EXCEPTION 'SCENARIO 12B FAILED: Unexpected error message: %', SQLERRM;
+        END IF;
+        RAISE NOTICE 'SCENARIO 12B PASSED: service_role execution of review_resolution_request rejected.';
+    END;
+
+    -- Sub-scenario 12C: Attempt GUC forgery (nagrik.authorized_review_flow) to bypass direct SQL update guard
+    PERFORM set_config('nagrik.authorized_review_flow', 'true', true);
+    BEGIN
         UPDATE public.resolution_submissions
         SET review_status = 'approved', reviewed_by = v_super_admin_id, reviewed_at = now()
         WHERE id = v_sub_id;
-        RAISE EXCEPTION 'SCENARIO 12C FAILED: Direct UPDATE of review_status should have been blocked!';
+        RAISE EXCEPTION 'SCENARIO 12C FAILED: Direct UPDATE of review_status with forged GUC should have been blocked!';
     EXCEPTION WHEN OTHERS THEN
         IF SQLERRM NOT LIKE '%Direct modification of review_status forbidden%' THEN
             RAISE EXCEPTION 'SCENARIO 12C FAILED: Unexpected error message: %', SQLERRM;
         END IF;
-        RAISE NOTICE 'SCENARIO 12C PASSED: Direct SQL mutation of review_status bypassing review_resolution_request rejected.';
+        RAISE NOTICE 'SCENARIO 12C PASSED: Direct SQL mutation of review_status with forged GUC rejected by call stack guard.';
     END;
 
-    -- Sub-scenario 12D: Attempt direct UPDATE of spot to RESOLVED while submission is pending
+    -- Sub-scenario 12D: Attempt direct UPDATE of spot to RESOLVED via direct SQL (bypassing review_resolution_request)
     BEGIN
         UPDATE public.spots SET status = 'RESOLVED', resolved_at = now() WHERE id = v_test_spot_id;
-        RAISE EXCEPTION 'SCENARIO 12D FAILED: Direct spot resolution with pending submission should have been blocked!';
+        RAISE EXCEPTION 'SCENARIO 12D FAILED: Direct spot resolution via SQL should have been blocked!';
     EXCEPTION WHEN OTHERS THEN
-        IF SQLERRM NOT LIKE '%lacks an approved resolution submission%' THEN
+        IF SQLERRM NOT LIKE '%Spots can only be transitioned to RESOLVED via review_resolution_request%' AND SQLERRM NOT LIKE '%service_role cannot resolve spots%' THEN
             RAISE EXCEPTION 'SCENARIO 12D FAILED: Unexpected error message: %', SQLERRM;
         END IF;
-        RAISE NOTICE 'SCENARIO 12D PASSED: Direct spot transition to RESOLVED without approved submission rejected by guard_spot_resolution.';
+        RAISE NOTICE 'SCENARIO 12D PASSED: Direct spot transition to RESOLVED rejected by guard_spot_resolution call stack check.';
     END;
 
-    -- Sub-scenario 12E: Legitimate review_resolution_request execution succeeds and sets RESOLVED
+    -- Sub-scenario 12E: Legitimate review_resolution_request execution as authenticated super-admin succeeds
+    PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
+    PERFORM set_config('request.jwt.claim.sub', 'a0000000-0000-0000-0000-000000000001', true);
     PERFORM public.review_resolution_request(
         v_sub_id,
         v_super_admin_id,
