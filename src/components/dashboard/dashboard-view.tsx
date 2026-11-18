@@ -12,6 +12,7 @@ import {
   submitResolutionAction,
   reviewResolutionAction,
   createChallengeAction,
+  reviewReportAction,
 } from "@/lib/workflow/actions";
 
 export type SimulatedRole =
@@ -84,6 +85,8 @@ export interface DashboardReport {
   description_private: string;
   latitude: number;
   longitude: number;
+  review_status?: string;
+  evidence_path?: string | null;
   created_at: string;
   candidate_spots?: Array<{
     spot_id: string;
@@ -249,6 +252,38 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
     if (res.success) {
       setUnlinkedReports((prev) => prev.filter((r) => r.id !== reportId));
       setActionNotice({ type: "success", message: `Report linked to spot successfully.` });
+    } else {
+      setActionNotice({ type: "error", message: res.error });
+    }
+  };
+
+  const handleReviewReport = async (
+    reportId: string,
+    reviewStatus: "under_review" | "rejected",
+    reason?: string
+  ) => {
+    setActionNotice(null);
+    if (isDemo) {
+      setActionNotice({ type: "error", message: "Forbidden: Cannot review reports in demo workspace." });
+      return;
+    }
+
+    const res = await reviewReportAction({
+      reportId,
+      reviewStatus,
+      rejectionReason: reason || null,
+    });
+
+    if (res.success) {
+      if (reviewStatus === "rejected") {
+        setUnlinkedReports((prev) => prev.filter((r) => r.id !== reportId));
+        setActionNotice({ type: "success", message: "Report rejected successfully." });
+      } else {
+        setUnlinkedReports((prev) =>
+          prev.map((r) => (r.id === reportId ? { ...r, review_status: reviewStatus } : r))
+        );
+        setActionNotice({ type: "success", message: `Report marked as ${reviewStatus}.` });
+      }
     } else {
       setActionNotice({ type: "error", message: res.error });
     }
@@ -516,13 +551,21 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                     className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 space-y-2"
                   >
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex items-center gap-2">
                         <span className="font-mono text-xs font-bold text-brand-600 dark:text-brand-400">
                           {report.ticket_code}
                         </span>
-                        <span className="ml-2 text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                           {report.category_name}
                         </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
+                          {report.review_status || "new"}
+                        </span>
+                        {report.evidence_path && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-medium">
+                            📷 Photo Attached
+                          </span>
+                        )}
                       </div>
                       <span className="text-[10px] text-slate-400 font-mono">
                         {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
@@ -532,6 +575,42 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                     <p className="text-xs text-slate-700 dark:text-slate-300">
                       {report.description_private}
                     </p>
+
+                    {/* Deterministic Duplicate Candidates Display (Haversine 0-10m) */}
+                    {report.candidate_spots && report.candidate_spots.length > 0 && (
+                      <div className="p-2 rounded bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-xs space-y-1">
+                        <span className="font-semibold text-amber-900 dark:text-amber-200 text-[11px]">
+                          Deterministic Duplicate Candidates (Haversine ≤ 10m):
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {report.candidate_spots.map((cand) => (
+                            <div
+                              key={cand.spot_id}
+                              className="inline-flex items-center gap-2 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-[11px]"
+                            >
+                              <span
+                                className={
+                                  cand.candidate_band === "STRONG_CANDIDATE"
+                                    ? "text-emerald-700 dark:text-emerald-400 font-bold"
+                                    : "text-amber-700 dark:text-amber-400 font-medium"
+                                }
+                              >
+                                {cand.candidate_band === "STRONG_CANDIDATE"
+                                  ? "0–5m Strong"
+                                  : ">5–10m Possible"}
+                                : {cand.spot_code} ({cand.distance_m}m)
+                              </span>
+                              <button
+                                onClick={() => handleLinkReport(report.id, cand.spot_id, cand.distance_m)}
+                                className="text-[10px] underline text-blue-600 hover:text-blue-700 font-semibold"
+                              >
+                                Link to this Spot
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="pt-2 flex flex-wrap items-center gap-2">
                       <Button
@@ -567,6 +646,32 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                           </select>
                         </div>
                       )}
+
+                      {report.review_status === "new" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReviewReport(report.id, "under_review")}
+                          className="text-xs h-7 px-2.5 border-slate-300 dark:border-slate-700"
+                        >
+                          Mark Under Review
+                        </Button>
+                      )}
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          handleReviewReport(
+                            report.id,
+                            "rejected",
+                            "Rejected by super-administrator during administrative triage."
+                          )
+                        }
+                        className="text-xs h-7 px-2.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 border-rose-200 dark:border-rose-900/50"
+                      >
+                        Reject
+                      </Button>
                     </div>
                   </div>
                 ))}

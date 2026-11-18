@@ -7,6 +7,10 @@ import {
   type DashboardReport,
 } from "@/components/dashboard/dashboard-view";
 import { DEMO_SPOTS } from "@/lib/demo/demo-issues";
+import {
+  calculateHaversineDistanceMetres,
+  classifyCandidateBand,
+} from "@/lib/geospatial/haversine";
 
 export const metadata = {
   title: "Operational Dashboard — Nagrik",
@@ -134,23 +138,56 @@ export default async function DashboardPage() {
           description_private,
           latitude,
           longitude,
-          created_at
+          review_status,
+          created_at,
+          evidence ( storage_path_private )
         `)
         .is("spot_id", null)
         .eq("is_demo", false)
         .order("created_at", { ascending: false });
 
       if (reportsData && reportsData.length > 0) {
-        unlinkedReports = (reportsData as any[]).map((r: any) => ({
-          id: r.id,
-          ticket_code: r.ticket_code,
-          category_id: r.category_id,
-          category_name: r.category_id.replace(/_/g, " ").toUpperCase(),
-          description_private: r.description_private,
-          latitude: Number(r.latitude || 19.0475),
-          longitude: Number(r.longitude || 73.0699),
-          created_at: r.created_at,
-        }));
+        unlinkedReports = (reportsData as any[]).map((r: any) => {
+          const lat = Number(r.latitude || 19.0475);
+          const lon = Number(r.longitude || 73.0699);
+
+          // Deterministic duplicate candidate calculation against existing spots
+          const candidates = spots
+            .filter((s) => s.category_id === r.category_id)
+            .map((s) => {
+              const dist = calculateHaversineDistanceMetres(
+                lat,
+                lon,
+                s.canonical_latitude,
+                s.canonical_longitude
+              );
+              return {
+                spot_id: s.id,
+                spot_code: s.spot_code,
+                distance_m: Math.round(dist * 10) / 10,
+                candidate_band: classifyCandidateBand(dist),
+              };
+            })
+            .filter((c) => c.candidate_band !== "NOT_A_CANDIDATE")
+            .sort((a, b) => a.distance_m - b.distance_m);
+
+          const evList = r.evidence as { storage_path_private: string }[] | null;
+          const evPath = evList && evList.length > 0 ? evList[0].storage_path_private : null;
+
+          return {
+            id: r.id,
+            ticket_code: r.ticket_code,
+            category_id: r.category_id,
+            category_name: r.category_id.replace(/_/g, " ").toUpperCase(),
+            description_private: r.description_private,
+            latitude: lat,
+            longitude: lon,
+            review_status: r.review_status || "new",
+            evidence_path: evPath,
+            created_at: r.created_at,
+            candidate_spots: candidates,
+          };
+        });
       }
     }
   } catch {

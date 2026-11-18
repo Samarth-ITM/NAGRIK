@@ -115,3 +115,11 @@ export const CreateChallengeSchema = z.object({
   note: z.string().max(500, "Note exceeds 500 characters").nullish(),
   reportId: z.string().uuid("Invalid report UUID").nullish(),
 });
+
+export const ReviewReportSchema = z.object({
+  reportId: z.string().uuid("Invalid report UUID"),
+  reviewStatus: z.enum(["under_review", "verified", "rejected"], {
+    errorMap: () => ({ message: "Invalid report review status" }),
+  }),
+  rejectionReason: z.string().max(500, "Rejection reason exceeds 500 characters").nullish(),
+});

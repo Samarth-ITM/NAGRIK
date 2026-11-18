@@ -12,6 +12,7 @@ import {
   SubmitResolutionSchema,
   ReviewResolutionSchema,
   CreateChallengeSchema,
+  ReviewReportSchema,
 } from "./schemas";
 
 export {
@@ -22,6 +23,7 @@ export {
   SubmitResolutionSchema,
   ReviewResolutionSchema,
   CreateChallengeSchema,
+  ReviewReportSchema,
 };
 
 export type ActionResult<T = unknown> =
@@ -379,6 +381,63 @@ export async function createChallengeAction(formData: unknown): Promise<ActionRe
     revalidatePath("/dashboard");
     revalidatePath("/issues");
     return { success: true, data: result };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "An unexpected error occurred.",
+    };
+  }
+}
+
+/**
+ * Super-Admin Server Action: Review Report Status (mark under_review or rejected)
+ */
+export async function reviewReportAction(formData: unknown): Promise<ActionResult> {
+  try {
+    const parseResult = ReviewReportSchema.safeParse(formData);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        error: parseResult.error.errors[0]?.message || "Invalid input parameters.",
+      };
+    }
+    const data = parseResult.data;
+
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Authentication required." };
+    }
+
+    const { data: profile } = await (supabase as any)
+      .from("profiles")
+      .select("role")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!isSuperAdmin(profile?.role)) {
+      return { success: false, error: "Only super administrators can review reports." };
+    }
+
+    const { error: updateError } = await (supabase as any)
+      .from("reports")
+      .update({
+        review_status: data.reviewStatus,
+        match_note: data.rejectionReason || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.reportId);
+
+    if (updateError) {
+      return { success: false, error: updateError.message };
+    }
+
+    revalidatePath("/dashboard");
+    return { success: true, data: { reportId: data.reportId, reviewStatus: data.reviewStatus } };
   } catch (err) {
     return {
       success: false,

@@ -105,6 +105,9 @@ echo "Applying Migration 10: Resolution Call Stack & Service-Role Hardening..."
 echo "Applying Migration 11: Exact Call Stack & Schema Qualification Hardening..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000011_exact_call_stack_and_schema_qualification.sql > /dev/null
 
+echo "Applying Migration 12: Citizen Report Intake & Conversation Persistence..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/migrations/20261115000012_citizen_report_intake.sql > /dev/null
+
 echo "Applying Authoritative Seed Dataset..."
 "$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/seed.sql > /dev/null
 
@@ -393,7 +396,16 @@ else
     exit 1
 fi
 
+echo "Executing Phase 5 Citizen Report Intake & Conversation Tests..."
+"$PG_BIN/psql" -h "$TEMP_DIR" -p $PORT -U postgres -f supabase/tests/phase_05_intake_test.sql
+
 echo "Executing Phase 4C Input Validation & Access Control Unit Tests..."
 node --experimental-strip-types src/lib/workflow/__tests__/phase_04c_validation.test.ts
+
+echo "Executing Phase 5 Cryptography & Identity Unit Tests..."
+npx tsx src/lib/telegram/__tests__/crypto.test.ts
+
+echo "Executing Phase 5 Pipeline & Webhook Unit Tests..."
+npx tsx src/lib/telegram/__tests__/fsm_webhook.test.ts
 
 echo "ALL VALIDATION CHECKS COMPLETED SUCCESSFULLY!"

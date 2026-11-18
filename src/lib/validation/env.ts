@@ -27,7 +27,9 @@ export const envSchema = z.object({
 
   // Security & Cryptography
   CITIZEN_HMAC_SECRET: z.string().optional(),
+  TELEGRAM_USER_SALT: z.string().optional(),
   TELEGRAM_CHAT_ID_ENCRYPTION_KEY: z.string().optional(),
+  CITIZEN_ENCRYPTION_KEY: z.string().optional(),
 
   // Optional AI (Disabled by default per TRD Section 12)
   AI_ENABLED: z
