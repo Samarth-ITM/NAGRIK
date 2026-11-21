@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateWebhookSecret } from "@/lib/telegram/crypto";
 import { TelegramConversationFSM } from "@/lib/telegram/fsm";
+import { TelegramBotClient } from "@/lib/telegram/bot";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import type { TelegramUpdate } from "@/lib/telegram/types";
 import { PILOT_CONFIG } from "@/lib/config/pilot";
@@ -103,6 +104,20 @@ export async function POST(req: NextRequest) {
       processing_status: "failed",
       failure_reason: errorMsg.slice(0, 500),
     });
+
+    // Never leave the resident with silence: tell them something went wrong.
+    try {
+      const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
+      if (chatId) {
+        await new TelegramBotClient().sendMessage(
+          chatId,
+          "⚠️ Nagrik couldn't process that just now. Please try again in a minute.\n" +
+            "⚠️ अभी समस्या आई। कृपया एक मिनट बाद फिर से कोशिश करें।"
+        );
+      }
+    } catch {
+      /* best effort */
+    }
 
     // Return 200 to prevent Telegram from looping retries indefinitely on broken updates
     return NextResponse.json(
