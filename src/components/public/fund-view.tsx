@@ -109,14 +109,6 @@ function Recent({ summary }: { summary: PublicFundingSummary }) {
   );
 }
 
-function SampleBanner() {
-  return (
-    <p className="nk-fund__sample" role="note">
-      <strong>Sample details</strong> for the demo. Don&rsquo;t send money; payments are switched off.
-    </p>
-  );
-}
-
 function NotReady({ what }: { what: string }) {
   return (
     <div className="nk-fund__notready" role="status">
@@ -162,7 +154,6 @@ function CitizenPanel({ config }: { config: FundingConfig }) {
 
   return (
     <div className="nk-fund__panel">
-      {config.sample && <SampleBanner />}
       <div className="nk-fund__chips" role="radiogroup" aria-label="Amount">
         {CITIZEN_AMOUNTS.map((a) => (
           <button
@@ -281,7 +272,6 @@ function CsrPanel({ config }: { config: FundingConfig }) {
 
   return (
     <div className="nk-fund__panel">
-      {config.sample && <SampleBanner />}
       <dl className="nk-fund__bank">
         {rows.map((r) => (
           <div key={r.label}>
