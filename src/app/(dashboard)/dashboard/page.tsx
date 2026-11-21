@@ -148,8 +148,8 @@ export default async function DashboardPage() {
 
       if (reportsData && reportsData.length > 0) {
         unlinkedReports = (reportsData as any[]).map((r: any) => {
-          const lat = Number(r.latitude || 19.0338);
-          const lon = Number(r.longitude || 73.0630);
+          const lat = Number(r.latitude || 19.0435);
+          const lon = Number(r.longitude || 73.0680);
 
           // Deterministic duplicate candidate calculation against existing spots
           const candidates = spots

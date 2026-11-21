@@ -9,10 +9,10 @@ export const envSchema = z.object({
   // Application
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   APP_ENV: z.enum(["development", "preview", "production", "test"]).default("development"),
-  PILOT_ID: z.string().default("kharghar_itm_v1"),
-  PILOT_RADIUS_METRES: z.coerce.number().default(2000),
-  PILOT_CENTRE_LAT: z.coerce.number().default(19.0338),
-  PILOT_CENTRE_LON: z.coerce.number().default(73.0630),
+  PILOT_ID: z.string().default("kharghar_city_v1"),
+  PILOT_RADIUS_METRES: z.coerce.number().default(6000),
+  PILOT_CENTRE_LAT: z.coerce.number().default(19.0435),
+  PILOT_CENTRE_LON: z.coerce.number().default(73.0680),
 
   // Supabase
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),

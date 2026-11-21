@@ -12,8 +12,8 @@ const DynamicMapView = dynamic(() => import("./map-view"), {
   loading: () => (
     <div className="w-full h-full min-h-[380px] flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-xl p-6 text-center">
       <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mb-3" />
-      <span className="text-xs font-medium">Loading Kharghar Sector 4 Map Tiles...</span>
-      <span className="text-xs text-slate-400 mt-1">OpenStreetMap &middot; 500m ITM Geofence</span>
+      <span className="text-xs font-medium">Loading Kharghar City Map Tiles...</span>
+      <span className="text-xs text-slate-400 mt-1">OpenStreetMap &middot; 6 km Kharghar City Geofence</span>
     </div>
   ),
 });
@@ -136,7 +136,7 @@ export function IssueMapSection() {
               Every reported issue, on the map
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Locations are rounded to protect reporters' privacy. Filter by status to see what is open and what has been fixed.
+              Locations are rounded to protect reporters&apos; privacy. Filter by status to see what is open and what has been fixed.
             </p>
           </div>
 

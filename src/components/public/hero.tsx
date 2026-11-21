@@ -15,7 +15,7 @@ export function Hero() {
         <div>
           <p className="nk-hero__where">
             <MapPin size={16} aria-hidden />
-            Live pilot in Sector 4, Kharghar
+            Live civic portal across Kharghar, Navi Mumbai
           </p>
 
           <h1 className="nk-hero__title">Report any civic problem. See who fixed it.</h1>

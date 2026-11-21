@@ -150,7 +150,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
       "📍 <b>Step 4 of 4: Where is it?</b>\nTap <b>Send my location</b> below. Your phone shares where you are right now, nothing to upload.\n\n<i>On a computer? Type the street name or a nearby landmark instead.</i>",
     location_received: "Location recorded successfully.",
     location_out_of_bounds:
-      "⚠️ That location is {dist} m from the ITM gate. Nagrik currently covers {radius} m in Sector 4, Kharghar.\nIf the problem is inside that area, send its location again, choose the campus button, or type a nearby landmark.",
+      "⚠️ That location is {dist} m from Kharghar center. Nagrik currently covers {radius} m across Kharghar City.\nIf the problem is inside Kharghar, send its location again, choose a quick button, or type a nearby landmark.",
     send_photo:
       "📷 <b>Step 3 of 4: Send a photo of the problem.</b>\nOne clear photo is enough.",
     photo_validating: "🔍 <i>Analyzing photo against selected issue...</i>",
@@ -201,7 +201,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
       "📍 <b>चरण 4/4: समस्या कहाँ है?</b>\nनीचे <b>मेरा स्थान भेजें</b> दबाएं। आपका फ़ोन अभी का स्थान भेज देगा, कुछ अपलोड नहीं करना है।\n\n<i>कंप्यूटर पर हैं? गली का नाम या पास का कोई लैंडमार्क लिखें।</i>",
     location_received: "स्थान सफलतापूर्वक दर्ज किया गया।",
     location_out_of_bounds:
-      "⚠️ यह स्थान ITM गेट से {dist} मी दूर है। नागरिक अभी खारघर सेक्टर 4 में इसके {radius} मी दायरे में काम करता है।\nअगर समस्या इस क्षेत्र में है, तो स्थान दोबारा भेजें, कैंपस बटन चुनें, या पास का लैंडमार्क लिखें।",
+      "⚠️ यह स्थान खारघर केंद्र से {dist} मी दूर है। नागरिक अभी पूरे खारघर शहर में {radius} मी दायरे में काम करता है।\nअगर समस्या खारघर में है, तो स्थान दोबारा भेजें, शहर बटन चुनें, या पास का लैंडमार्क लिखें।",
     send_photo: "📷 <b>चरण 3/4: समस्या का फोटो भेजें।</b>\nएक साफ़ फोटो काफ़ी है।",
     photo_validating: "🔍 <i>फोटो की जांच की जा रही है...</i>",
     photo_received: "फोटो सत्यापित हुआ और सुरक्षित रूप से सहेजा गया।",
@@ -250,7 +250,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
     send_location: "📍 <b>टप्पा 4/4: समस्या कुठे आहे?</b>\nखाली <b>माझे स्थान पाठवा</b> दाबा. तुमचा फोन आत्ताचे स्थान पाठवेल, काहीही अपलोड करायचे नाही.\n\n<i>संगणकावर आहात? रस्त्याचे नाव किंवा जवळची खूण लिहा.</i>",
     location_received: "स्थान यशस्वीरित्या नोंदवले गेले.",
     location_out_of_bounds:
-      "⚠️ हे स्थान ITM गेटपासून {dist} मी दूर आहे. नागरिक सध्या खारघर सेक्टर 4 मध्ये त्याच्या {radius} मी परिसरात काम करते.\nसमस्या या परिसरात असल्यास, स्थान पुन्हा पाठवा, कॅम्पस बटण निवडा किंवा जवळची खूण लिहा.",
+      "⚠️ हे स्थान खारघर केंद्रापासून {dist} मी दूर आहे. नागरिक सध्या संपूर्ण खारघर शहरात {radius} मी परिसरात काम करते.\nसमस्या खारघरमध्ये असल्यास, स्थान पुन्हा पाठवा, बटण निवडा किंवा जवळची खूण लिहा.",
     send_photo: "📷 <b>टप्पा 3/4: समस्येचा फोटो पाठवा.</b>\nएक स्पष्ट फोटो पुरेसा आहे.",
     photo_validating: "🔍 <i>फोटोची पडताळणी केली जात आहे...</i>",
     photo_received: "फोटो सत्यापित झाला आणि सुरक्षितपणे जतन केला गेला.",
@@ -1135,6 +1135,10 @@ export class TelegramConversationFSM {
           accuracy = message.location.horizontal_accuracy || 5.0;
           source = "telegram_location";
         } else if (locText && !locText.startsWith("/")) {
+          if (locText.includes("ITM")) {
+            lat = 19.0338;
+            lon = 73.0630;
+          }
           // Computers can't share GPS: accept a typed street or landmark.
           // It's kept with the report so the field team can find the spot.
           const landmark = locText.slice(0, 160);
@@ -1147,7 +1151,7 @@ export class TelegramConversationFSM {
           return;
         }
 
-        // Apply Kharghar Sector 4 pilot geofence check (coverage radius: PILOT_CONFIG.radiusMetres)
+        // Apply Kharghar City geofence check (coverage radius: PILOT_CONFIG.radiusMetres)
         const dist = calculateHaversineDistanceMetres(
           lat,
           lon,
@@ -1621,6 +1625,13 @@ export class TelegramConversationFSM {
   }
 
   private async sendLocationPrompt(chatId: number, lang: SupportedLanguage): Promise<void> {
+    const cityBtn =
+      lang === "hi"
+        ? "📍 खारघर शहर (डिफ़ॉल्ट)"
+        : lang === "mr"
+          ? "📍 खारघर शहर (डीफॉल्ट)"
+          : "📍 Kharghar City (Default)";
+
     const campusBtn =
       lang === "hi"
         ? "📍 ITM कैंपस (सेक्टर 4)"
@@ -1631,7 +1642,7 @@ export class TelegramConversationFSM {
     const keyboard: TelegramReplyKeyboardMarkup = {
       keyboard: [
         [{ text: MESSAGES[lang].btn_share_location, request_location: true }],
-        [{ text: campusBtn }],
+        [{ text: cityBtn }, { text: campusBtn }],
         [{ text: MESSAGES[lang].btn_cancel_report }],
       ],
       resize_keyboard: true,

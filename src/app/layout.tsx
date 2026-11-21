@@ -24,9 +24,9 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Nagrik | Report any civic problem in Sector 4, Kharghar",
+  title: "Nagrik | Report any civic problem across Kharghar, Navi Mumbai",
   description:
-    "Report garbage, drains, water supply, streetlights, roads, parks and any other civic problem on Telegram, and see photo proof when it's fixed. Sector 4, Kharghar, Navi Mumbai.",
+    "Report garbage, drains, water supply, streetlights, roads, parks and any other civic problem on Telegram, and see photo proof when it's fixed. Kharghar, Navi Mumbai.",
 };
 
 export default function RootLayout({

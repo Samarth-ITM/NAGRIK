@@ -16,9 +16,9 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<{ [id: string]: L.CircleMarker }>({});
 
-  const PILOT_ANCHOR_LAT = 19.0338;
-  const PILOT_ANCHOR_LON = 73.0630;
-  const PILOT_RADIUS_METRES = 2000;
+  const PILOT_ANCHOR_LAT = 19.0435;
+  const PILOT_ANCHOR_LON = 73.0680;
+  const PILOT_RADIUS_METRES = 6000;
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -27,8 +27,8 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
     // Initialize Leaflet Map
     const map = L.map(mapContainerRef.current, {
       center: [PILOT_ANCHOR_LAT, PILOT_ANCHOR_LON],
-      zoom: 16,
-      minZoom: 14,
+      zoom: 13,
+      minZoom: 11,
       maxZoom: 18,
       scrollWheelZoom: false,
     });
@@ -40,7 +40,7 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
       maxZoom: 19,
     }).addTo(map);
 
-    // Pilot 500m Reference Radius Circle (Explicitly approximate reference circle per TRD 4.1 & Audit Item 12)
+    // Kharghar City 6km Reference Radius Circle
     const geofenceCircle = L.circle([PILOT_ANCHOR_LAT, PILOT_ANCHOR_LON], {
       radius: PILOT_RADIUS_METRES,
       color: "#2563eb",
@@ -51,15 +51,15 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
     }).addTo(map);
 
     geofenceCircle.bindTooltip(
-      "Illustrative 500m Reference Radius (Approximate pilot perimeter around ITM entrance; not an officially surveyed municipal boundary)",
+      "Kharghar City Perimeter (6 km coverage encompassing Sectors 1 to 45)",
       { permanent: false, direction: "top" }
     );
 
     geofenceCircle.bindPopup(`
- <div style="font-family: inherit; font-size: 11px; line-height: 1.4; max-width: 200px;">
- <strong style="color: #1e40af;">Illustrative Reference Perimeter</strong><br/>
- 500m straight-line radius from ITM public entrance.<br/>
- <span style="color: #64748b; font-size: 10px;">Demonstration boundary; not an officially surveyed municipal ward boundary.</span>
+ <div style="font-family: inherit; font-size: 11px; line-height: 1.4; max-width: 220px;">
+ <strong style="color: #1e40af;">Kharghar City Civic Perimeter</strong><br/>
+ 6 km straight-line radius from Kharghar City Centre (Central Park).<br/>
+ <span style="color: #64748b; font-size: 10px;">Covers all 45+ sectors of Kharghar, Navi Mumbai.</span>
  </div>
  `);
 
@@ -75,9 +75,9 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
 
     anchorMarker.bindPopup(`
  <div style="font-family: inherit; font-size: 12px; line-height: 1.4;">
- <strong style="color: #1e3a8a;">Pilot Reference Anchor</strong><br/>
- ITM Skills University Public Entrance<br/>
- Sector 4, Kharghar (Immutable Benchmark)
+ <strong style="color: #1e3a8a;">Kharghar City Centre Anchor</strong><br/>
+ Central Park / Sector 12<br/>
+ Kharghar, Navi Mumbai (Benchmark Point)
  </div>
  `);
 

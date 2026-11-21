@@ -21,11 +21,9 @@ export function PilotArea() {
     <section id="pilot-area" className="nk-pilot">
       <div className="nk-pilot__inner">
         <div>
-          <h2 className="nk-h2">Where the pilot runs</h2>
+          <h2 className="nk-h2">Where Nagrik runs</h2>
           <p className="nk-lede">
-            We&apos;re starting small so every report gets checked quickly: any civic problem in public spaces within{" "}
-            {PILOT_CONFIG.radiusMetres} metres of the ITM Skills University gate in Sector 4, Kharghar. If you share a
-            location outside it, the bot asks for one inside the area.
+            Nagrik covers the entire city of Kharghar across {PILOT_CONFIG.radiusMetres / 1000} km (all 45+ sectors from Sector 1 to Sector 45). Any civic problem in public spaces can be reported via Telegram. If a location pin is shared from outside Kharghar, the bot asks for a valid location inside the city.
           </p>
 
           <div className="nk-pilot__lists">

@@ -19,7 +19,7 @@ export function CategoryExplorer() {
             What you can report
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Every report goes into one of three groups and twelve categories, so it reaches the right team the first time. Can't find yours? Choose “Other” and describe it.
+            Every report goes into one of three groups and twelve categories, so it reaches the right team the first time. Can&apos;t find yours? Choose “Other” and describe it.
           </p>
 
           {/* Language Switcher */}

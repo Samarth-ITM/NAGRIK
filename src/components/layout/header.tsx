@@ -89,7 +89,7 @@ export function Header() {
           </span>
           <span className="leading-tight">
             <span className="block text-[17px] font-extrabold tracking-tight text-slate-900">Nagrik</span>
-            <span className="block text-xs text-slate-500">Sector 4, Kharghar</span>
+            <span className="block text-xs text-slate-500">Kharghar, Navi Mumbai</span>
           </span>
         </Link>
 
