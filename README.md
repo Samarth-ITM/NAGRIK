@@ -29,7 +29,7 @@ It is built so any Indian city, ward or campus can run it: set the coverage area
 
 <br>
 
-## Our first partner
+## Our NGO partners
 
 <table>
   <tr>
@@ -38,6 +38,14 @@ It is built so any Indian city, ward or campus can run it: set the coverage area
       <b>Clean Bharat</b> is Nagrik's first NGO partner, working with us in our pilot area of <b>Kharghar, Navi Mumbai</b>.
       <br><br>
       Their field team picks up residents' reports on the Nagrik field desk, fixes the problem, and posts the after-photo as proof. Every fix they post carries their name and logo on the public site, so residents can see exactly who showed up.
+    </td>
+  </tr>
+  <tr>
+    <td width="200" align="center"><img src="docs/media/vanashakti.png" width="170" alt="Vanashakti logo"></td>
+    <td>
+      <b>Vanashakti</b>, the Mumbai environmental NGO, is joining as our next partner. The partnership is being finalised.
+      <br><br>
+      Once confirmed, their team will pick up and resolve reports on the Nagrik field desk, with their name and logo on every fix.
     </td>
   </tr>
 </table>
