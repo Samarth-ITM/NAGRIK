@@ -2360,3 +2360,165 @@ html {
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Text-light pass (Nov 2026): animated issue pictures                 */
+/* To undo the whole pass: git checkout pre-text-light -- src/          */
+/* ------------------------------------------------------------------ */
+
+.nk-ico { display: block; overflow: visible; }
+.nk-ico * { transform-box: fill-box; }
+
+@keyframes nk-ico-drip {
+  0% { transform: translateY(0); opacity: 0; }
+  15% { opacity: 1; }
+  75% { transform: translateY(12px); opacity: 1; }
+  100% { transform: translateY(14px); opacity: 0; }
+}
+@keyframes nk-ico-flicker { 0%, 100% { opacity: 0.85; } 40% { opacity: 0.85; } 46% { opacity: 0.25; } 52% { opacity: 0.8; } 58% { opacity: 0.35; } 64% { opacity: 0.85; } }
+@keyframes nk-ico-wobble { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-16deg); } }
+@keyframes nk-ico-sway { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(5deg); } }
+@keyframes nk-ico-ripple { 0%, 100% { transform: scale(1, 1); } 50% { transform: scale(0.82, 0.9); } }
+@keyframes nk-ico-pulse { 0%, 100% { transform: scale(1); opacity: 0.55; } 50% { transform: scale(1.06); opacity: 0.8; } }
+@keyframes nk-ico-orbit { from { transform: rotate(0deg) translateX(4px) rotate(0deg); } to { transform: rotate(360deg) translateX(4px) rotate(-360deg); } }
+@keyframes nk-ico-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes nk-ico-spin { to { transform: rotate(360deg); } }
+@keyframes nk-ico-tile { 0%, 100% { transform: rotate(-8deg) translateY(0); } 50% { transform: rotate(-3deg) translateY(-1.5px); } }
+
+.nk-ico-drip { animation: nk-ico-drip 1.8s ease-in infinite; }
+.nk-ico-drip--late { animation-delay: 0.9s; }
+.nk-ico-flicker { animation: nk-ico-flicker 3.2s ease-in-out infinite; }
+.nk-ico-lid { transform-origin: 0% 50%; animation: nk-ico-wobble 2.6s ease-in-out infinite; }
+.nk-ico-sway { transform-origin: 0% 100%; animation: nk-ico-sway 3s ease-in-out infinite; }
+.nk-ico-ripple { transform-origin: 50% 50%; animation: nk-ico-ripple 2.4s ease-in-out infinite; }
+.nk-ico-pulse { transform-origin: 50% 50%; animation: nk-ico-pulse 2.8s ease-in-out infinite; }
+.nk-ico-orbit { transform-origin: 50% 50%; animation: nk-ico-orbit 2.2s linear infinite; }
+.nk-ico-orbit--slow { animation-duration: 3.4s; animation-direction: reverse; }
+.nk-ico-blink { animation: nk-ico-blink 1.6s ease-in-out infinite; }
+.nk-ico-spin { transform-origin: 50% 50%; animation: nk-ico-spin 12s linear infinite; }
+.nk-ico-tile { transform-origin: 0% 100%; animation: nk-ico-tile 2.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nk-ico * { animation: none !important; }
+}
+
+/* Hero: row of pictures in place of the long sentence */
+.nk-issue-strip {
+  list-style: none;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem 1.1rem;
+  max-width: 34rem;
+}
+.nk-issue-strip li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  width: 4.4rem;
+}
+.nk-issue-strip__pic {
+  width: 3.75rem;
+  height: 3.75rem;
+  border-radius: 999px;
+  background: var(--nk-surface);
+  border: 1px solid var(--nk-line);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 10px 24px -18px rgba(122, 66, 6, 0.5);
+}
+.nk-issue-strip__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  color: var(--nk-ink-2);
+}
+
+/* "What you can report" grid */
+.nk-report-grid {
+  background: var(--nk-surface-2);
+  border-top: 1px solid var(--nk-line);
+  border-bottom: 1px solid var(--nk-line);
+  padding: 4.5rem 1.25rem;
+}
+.nk-report-grid__inner { max-width: 72rem; margin: 0 auto; }
+.nk-report-grid__list {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+}
+@media (max-width: 900px) { .nk-report-grid__list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .nk-report-grid__list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.nk-report-grid__tile {
+  background: var(--nk-surface);
+  border: 1px solid var(--nk-line);
+  border-radius: 1.25rem;
+  padding: 1.25rem 0.75rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--nk-ink);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.nk-report-grid__tile:hover { transform: translateY(-3px); box-shadow: var(--nk-shadow); }
+
+/* Accountability: compact five-step track */
+.nk-life__track--compact .nk-life__title { margin-top: 0.75rem; }
+.nk-life__track--compact .nk-life__who { margin-top: 0.15rem; }
+
+/* Pilot area: one big line instead of a paragraph */
+.nk-pilot__stat {
+  margin-top: 1rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--nk-ink);
+}
+.nk-pilot__stat span { color: var(--nk-saffron-deep); }
+
+/* About: three short points with icons */
+.nk-about__points {
+  list-style: none;
+  margin: 1.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.nk-about__points li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--nk-ink);
+}
+.nk-about__points svg {
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0.6rem;
+  border-radius: 999px;
+  background: var(--nk-peach);
+  color: var(--nk-saffron-deep);
+}
+.nk-report-grid__pic {
+  width: 5.5rem;
+  height: 5.5rem;
+  border-radius: 999px;
+  background: var(--nk-peach);
+  display: grid;
+  place-items: center;
+}
+@media (max-width: 520px) {
+  .nk-issue-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); justify-items: center; }
+}

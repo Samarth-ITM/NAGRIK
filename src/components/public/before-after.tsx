@@ -332,10 +332,6 @@ export function BeforeAfter() {
       <div className="nk-ba__inner">
         <div className="nk-ba__head">
           <h2 className="nk-display nk-display--sm">Before and after</h2>
-          <p className="nk-lede">
-            A ticket only closes when there&apos;s an after-photo to prove the repair. Drag the line across this
-            street to see what that looks like.
-          </p>
         </div>
 
         <div
@@ -387,7 +383,6 @@ export function BeforeAfter() {
             </li>
           ))}
         </ul>
-        <p className="nk-ba__note">Illustration of typical fixes reported through Nagrik.</p>
       </div>
     </section>
   );

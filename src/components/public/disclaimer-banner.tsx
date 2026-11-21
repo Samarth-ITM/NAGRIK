@@ -7,7 +7,7 @@ export function DisclaimerBanner() {
         <div className="flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 text-amber-700 dark:text-amber-400" />
           <span>
-            <strong>Independent civic pilot</strong> for Kharghar, Navi Mumbai (not an official CIDCO or NMMC portal). Dial <strong>112</strong> for emergencies.
+            <strong>Independent civic pilot</strong> · Not a government portal · Emergency <strong>112</strong>
           </span>
         </div>
         <span className="hidden sm:inline-block text-xs font-medium opacity-80 shrink-0">

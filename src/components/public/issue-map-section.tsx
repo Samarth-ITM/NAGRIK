@@ -124,20 +124,17 @@ export function IssueMapSection() {
             {isLive ? (
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 text-xs font-semibold mb-2 border border-emerald-300 dark:border-emerald-800">
                 <Radio className="w-3.5 h-3.5 text-emerald-600 " />
-                <span>LIVE CIVIC DATA &middot; 25-50M PRIVACY DISCRETIZATION</span>
+                <span>Live</span>
               </div>
             ) : (
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 text-xs font-semibold mb-2 border border-amber-300 dark:border-amber-800">
                 <AlertTriangle className="w-3.5 h-3.5" />
-                <span>Sample data for illustration</span>
+                <span>Sample data</span>
               </div>
             )}
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-              Every reported issue, on the map
+              Issue map
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Locations are rounded to protect reporters&apos; privacy. Filter by status to see what is open and what has been fixed.
-            </p>
           </div>
 
           <div className="text-xs text-slate-500 shrink-0">
@@ -193,9 +190,7 @@ export function IssueMapSection() {
                   Kharghar, Navi Mumbai
                 </span>
               </div>
-              <span className="text-xs text-slate-400">
-                Leaflet / OpenStreetMap
-              </span>
+
             </div>
 
             <div className="h-[380px] sm:h-[440px] w-full relative">
@@ -215,13 +210,12 @@ export function IssueMapSection() {
                   <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block" /> In Progress
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> Verification Req.
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block" /> Repair submitted
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Resolved
                 </span>
               </div>
-              <span className="text-slate-400">Click marker to inspect details</span>
             </div>
           </div>
 
@@ -261,9 +255,6 @@ export function IssueMapSection() {
                   {selectedSpot.title}
                 </h3>
 
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {selectedSpot.public_summary}
-                </p>
 
                 {/* Handed off to Official Portal Link */}
                 {selectedSpot.status === "HANDED_OFF" && (
@@ -272,9 +263,6 @@ export function IssueMapSection() {
                       <span>Official Municipal Escalation</span>
                       <span className="text-xs bg-purple-200 dark:bg-purple-800 px-2 py-0.5 rounded">CIDCO / PMC</span>
                     </div>
-                    <p className="text-xs text-purple-700 dark:text-purple-300">
-                      This issue was officially transmitted to the competent municipal authority with recorded dispatch proof.
-                    </p>
                     <a
                       href="https://cidco.maharashtra.gov.in"
                       target="_blank"
@@ -306,11 +294,8 @@ export function IssueMapSection() {
                           </div>
                         )}
                         <div>
-                          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-bold block ">
-                            Verified Defect Repair
-                          </span>
                           <span className="font-extrabold text-emerald-900 dark:text-emerald-100">
-                            Repaired &amp; Verified by {ngoPartner?.name || "Kharghar Citizens Welfare Forum"}
+                            Fixed by {ngoPartner?.name || "partner NGO"}
                           </span>
                         </div>
                       </div>

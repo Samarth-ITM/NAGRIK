@@ -32,7 +32,7 @@ function TicketPhone() {
               <br />
               Ticket: <code className="nk-tg__code">NAG-KHR-2026-000123</code>
               <br />
-              Garbage accumulation, Sector 4
+              Garbage accumulation
             </div>
             <div className="nk-tg__keys">
               <div className="nk-tg__keyrow">
@@ -93,9 +93,6 @@ export function HowItWorks() {
         <ol className="nk-steps__grid">
           <li className="nk-step nk-step--lead">
             <h3 className="nk-step__title">Report in Telegram</h3>
-            <p className="nk-step__text">
-              Pick your language and the type of problem, add a photo and a voice note, and share the location.
-            </p>
             <div className="nk-step__media nk-step__media--illus">
               <ReportIllustration />
             </div>
@@ -103,19 +100,13 @@ export function HowItWorks() {
 
           <li className="nk-step">
             <h3 className="nk-step__title">Get a ticket</h3>
-            <p className="nk-step__text">
-              The bot replies straight away with a ticket number. Keep it to follow your report.
-            </p>
             <div className="nk-step__media nk-step__media--phone">
               <TicketPhone />
             </div>
           </li>
 
           <li className="nk-step">
-            <h3 className="nk-step__title">Follow it to the fix</h3>
-            <p className="nk-step__text">
-              Tap Track My Tickets in the bot, or sign in here, to see the latest status and the after-photo.
-            </p>
+            <h3 className="nk-step__title">See it fixed</h3>
             <div className="nk-step__media nk-step__media--tracker">
               <TicketTracker />
             </div>

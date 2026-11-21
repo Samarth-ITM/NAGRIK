@@ -30,9 +30,7 @@ export function Footer() {
             </span>
             Nagrik
           </Link>
-          <p>
-            Report any civic problem across Kharghar, Navi Mumbai: garbage, drains, water supply, streetlights, roads, parks and more. Then see who fixed it.
-          </p>
+          <p>Report any civic problem. See who fixed it.</p>
           <a href={PUBLIC_BOT_URL} target="_blank" rel="noopener noreferrer" className="nk-footer__bot">
             @{PUBLIC_BOT_USERNAME} on Telegram
           </a>
@@ -66,10 +64,7 @@ export function Footer() {
 
       <div className="nk-footer__legal">
         <p>
-          Nagrik is an independent civic portal across Kharghar, Navi Mumbai. It is not an official grievance portal of the City and
-          Industrial Development Corporation (CIDCO), Panvel Municipal Corporation (PMC) or the Government of
-          Maharashtra, and no official partnership or integration is claimed. Sample data is synthetic and kept
-          separate from real reports. In an emergency, dial 112.
+          Independent civic platform. Not an official government portal. Emergency: 112.
         </p>
         <p className="nk-footer__copy">© {year} Nagrik</p>
       </div>

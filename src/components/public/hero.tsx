@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, MapPin, Send, Ticket } from "lucide-react";
+import { Building2, Send, Ticket } from "lucide-react";
 import { PUBLIC_BOT_URL } from "@/lib/telegram/public";
 import { NgoFixStack } from "@/components/public/ngo-fix-stack";
+import { IssueStrip } from "@/components/public/issue-icons";
 
 export function Hero() {
   return (
@@ -13,18 +14,9 @@ export function Hero() {
 
       <div className="nk-hero__inner">
         <div>
-          <p className="nk-hero__where">
-            <MapPin size={16} aria-hidden />
-            Live civic portal across Kharghar, Navi Mumbai
-          </p>
-
           <h1 className="nk-hero__title">Report any civic problem. See who fixed it.</h1>
 
-          <p className="nk-hero__lede">
-            Garbage piling up, a blocked drain, a water leak, a dark streetlight, a pothole, a damaged park. Send a
-            photo, a voice note and the location to our Telegram bot. A partner NGO takes it up, fixes it, and posts
-            an after-photo as proof.
-          </p>
+          <IssueStrip kinds={["garbage", "pothole", "drain", "leak", "light", "tree"]} />
 
           <div className="nk-hero__actions">
             <a href={PUBLIC_BOT_URL} target="_blank" rel="noopener noreferrer" className="nk-btn nk-btn--kerb">
@@ -38,10 +30,10 @@ export function Hero() {
           </div>
 
           <div className="nk-hero__meta">
-            <span>Works in English, हिन्दी and मराठी</span>
+            <span>English · हिन्दी · मराठी</span>
             <Link href="/login?role=ngo">
               <Building2 size={16} aria-hidden />
-              NGO? Open the field desk
+              NGO desk
             </Link>
           </div>
         </div>
