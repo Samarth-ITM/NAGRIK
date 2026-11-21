@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, Send, Ticket } from "lucide-react";
+import { Building2, HandCoins, Send, Ticket } from "lucide-react";
 import { PUBLIC_BOT_URL } from "@/lib/telegram/public";
 import { NgoFixStack, type NgoFixStackInitial } from "@/components/public/ngo-fix-stack";
 import { IssueStrip } from "@/components/public/issue-icons";
@@ -26,6 +26,10 @@ export function Hero({ initialFixes }: { initialFixes?: NgoFixStackInitial | nul
             <Link href="/login?role=citizen" className="nk-btn nk-btn--ghost-dark">
               <Ticket size={18} aria-hidden />
               Track my tickets
+            </Link>
+            <Link href="/fund" className="nk-btn nk-btn--ghost-dark">
+              <HandCoins size={18} aria-hidden />
+              Give funding
             </Link>
           </div>
 

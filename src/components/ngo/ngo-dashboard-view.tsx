@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { VoiceRecorderInput } from "./voice-recorder-input";
+import { FundingDesk } from "./funding-desk";
 import { statusLabel } from "@/components/shared/status-badge";
 
 interface NGOIssue {
@@ -702,6 +703,7 @@ export function NGODashboardView() {
             )}
           </section>
         </div>
+        <FundingDesk />
       </div>
     </div>
   );
