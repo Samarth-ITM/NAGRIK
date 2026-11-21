@@ -40,3 +40,4 @@ _backup_before_ui_fix/
 # runtime data
 /data/*.json
 /data/
+push-to-github.command
