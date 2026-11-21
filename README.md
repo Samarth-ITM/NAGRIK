@@ -2,10 +2,10 @@
 
 # Nagrik · नागरिक
 
-**Report any civic problem in Kharghar. See who fixed it.**
+**Report any civic problem in your city. See who fixed it.**
 
-A Telegram bot residents already know how to use, a field desk for the NGOs who do the repairs,<br>
-and a public website that shows the proof.
+A civic accountability platform for India: a Telegram bot residents already know how to use,<br>
+a field desk for the NGOs who do the repairs, and a public website that shows the proof.
 
 [**Report on Telegram**](https://t.me/NagrikKhargharBot) · [How it works](#how-it-works) · [Run it locally](#run-it-locally) · [Deploy](#deploy-to-vercel)
 
@@ -25,6 +25,8 @@ Potholes alone killed **2,385 people in India in 2024**, up from 1,555 in 2020 (
 
 Nagrik fixes the two broken steps: **reporting has to take seconds**, and **the resident has to see the repair**.
 
+It is built so any Indian city, ward or campus can run it: set the coverage area, invite local NGOs, and residents report in their own language from the phone they already have.
+
 <br>
 
 ## How it works
@@ -34,7 +36,7 @@ Nagrik fixes the two broken steps: **reporting has to take seconds**, and **the 
 | | Who | What happens |
 |:-:|---|---|
 | **1** | Resident | Opens the Telegram bot, taps the problem, records a voice note, sends a photo and their live location. About 30 seconds. |
-| **2** | Nagrik | Transcribes the voice note word for word, checks the photo matches the problem, works out the ward and police station, and issues a ticket like `NAG-KHR-2026-000011`. |
+| **2** | Nagrik | Transcribes the voice note word for word, checks the photo matches the problem, works out the local ward and police station, and issues a ticket number. |
 | **3** | Partner NGO | Sees the report on the field desk, fixes it, and uploads an after-photo with a note (typed or spoken). |
 | **4** | Resident | Opens *Track my tickets* and sees the before and after side by side. |
 
@@ -65,13 +67,13 @@ Every step that needs the phone shows a short looping animation, so first-time u
 ```text
 ✅ Report Submitted Successfully!
 
-Your Ticket Reference: NAG-KHR-2026-000011
+Your Ticket Reference: NAG-2026-000011
 
-📍 Location: Raintree Marg, Kharghar Village (GPS ±12 m)
+📍 Location: MG Road, near City Market (GPS ±12 m)
 🗺️ View on map
 
-🏛️ Administrative Ward: Kharghar Central (Sectors 8–20, Shilp Chowk)
-👮 Jurisdictional Police: Kharghar Police Station
+🏛️ Administrative Ward: Ward 12 (Central)
+👮 Jurisdictional Police: City Police Station
 📞 Station Desk: 022-27740100 | 🚨 Emergency: 112
 ```
 
@@ -91,7 +93,7 @@ A ticket only closes when there is an after-photo. The home page lets anyone dra
 
 Reports appear on a public map with **locations rounded to about 30 m**, so nobody's home can be pinpointed from a complaint.
 
-<img src="docs/media/map.jpg" alt="Public map of reported issues across Kharghar with a filterable list" width="100%">
+<img src="docs/media/map.jpg" alt="Public map of reported issues with a filterable list" width="100%">
 
 <br>
 
@@ -297,7 +299,7 @@ npm test
 | `CITIZEN_ENCRYPTION_KEY`, `TELEGRAM_CHAT_ID_ENCRYPTION_KEY` | ✅ | Keys for encrypting chat IDs |
 | `NGO_ACCESS_PASSWORD` | ✅ | Shared password for the NGO field desk (8+ characters) |
 | `NGO_SESSION_SECRET`, `CITIZEN_SESSION_SECRET` | ✅ | Sign web session cookies (64 random hex characters each) |
-| `PILOT_ID`, `PILOT_CENTRE_LAT`, `PILOT_CENTRE_LON`, `PILOT_RADIUS_METRES` | ✅ | Coverage area (default: 6 km around Kharghar) |
+| `PILOT_ID`, `PILOT_CENTRE_LAT`, `PILOT_CENTRE_LON`, `PILOT_RADIUS_METRES` | ✅ | Coverage area: the centre point and radius of the city or ward you serve |
 | `MAX_REPORTS_PER_TELEGRAM_USER_PER_DAY` | | Daily report cap per resident |
 | `AI_ENABLED`, `AI_PROVIDER`, `OPENAI_API_KEY`, `OPENAI_MODEL` | | Voice transcription and photo checks |
 | `AI_VOICE_TRANSCRIPTION_ENABLED` | | Turn voice notes on or off |
@@ -349,13 +351,14 @@ NAGRIK/
 - [ ] WhatsApp as a second reporting channel
 - [ ] Duplicate detection across nearby reports (shown to a human, never auto-merged)
 - [ ] Monthly public report card per ward
+- [ ] More Indian languages: Tamil, Telugu, Bengali, Kannada, Gujarati and more
 - [ ] More cities, one ward at a time
 
 <br>
 
 <div align="center">
 
-**Built for Kharghar, Navi Mumbai.**<br>
-Nagrik is an independent civic pilot and not an official CIDCO or NMMC portal. In an emergency, dial **112**.
+**Built for India, one ward at a time.**<br>
+Nagrik is an independent civic platform and not an official government portal. In an emergency, dial **112**.
 
 </div>
