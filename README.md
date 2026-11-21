@@ -29,6 +29,21 @@ It is built so any Indian city, ward or campus can run it: set the coverage area
 
 <br>
 
+## Our first partner
+
+<table>
+  <tr>
+    <td width="200" align="center"><img src="docs/media/clean-bharat.png" width="170" alt="Clean Bharat logo"></td>
+    <td>
+      <b>Clean Bharat</b> is Nagrik's first NGO partner, working with us in our pilot area of <b>Kharghar, Navi Mumbai</b>.
+      <br><br>
+      Their field team picks up residents' reports on the Nagrik field desk, fixes the problem, and posts the after-photo as proof. Every fix they post carries their name and logo on the public site, so residents can see exactly who showed up.
+    </td>
+  </tr>
+</table>
+
+<br>
+
 ## How it works
 
 <img src="docs/media/how-it-works.jpg" alt="Three steps: Report in Telegram, get a ticket, follow it to the fix" width="100%">
