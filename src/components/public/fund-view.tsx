@@ -150,7 +150,7 @@ function CitizenPanel({ config }: { config: FundingConfig }) {
     (valid ? `&am=${value.toFixed(2)}` : "") +
     `&cu=INR&tn=${encodeURIComponent("Nagrik civic repairs")}`;
 
-  const payable = valid && !config.sample;
+  const payable = valid;
 
   return (
     <div className="nk-fund__panel">
@@ -183,14 +183,14 @@ function CitizenPanel({ config }: { config: FundingConfig }) {
       </div>
 
       <div className="nk-fund__pay">
-        <div className={`nk-fund__qr-wrap ${config.sample ? "nk-fund__qr-wrap--sample" : ""}`}>
+        <div className="nk-fund__qr-wrap">
           <QrCode text={link} label={`UPI QR code to pay ${valid ? inr(value) : ""} to ${upi.payeeName}`} />
-          <span>{config.sample ? "Sample QR" : "Scan with any UPI app"}</span>
+          <span>Scan with any UPI app</span>
         </div>
         <div className="nk-fund__pay-side">
           <a href={payable ? link : undefined} aria-disabled={!payable} className="nk-btn nk-btn--kerb nk-fund__upi-btn">
             <Smartphone size={18} aria-hidden />
-            {config.sample ? "Payments off (sample)" : `Pay ${valid ? inr(value) : ""} with UPI`}
+            Pay {valid ? inr(value) : ""} with UPI
           </a>
           <div className="nk-fund__field">
             <span>UPI ID</span>

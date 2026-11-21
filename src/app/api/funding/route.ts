@@ -84,11 +84,10 @@ export async function POST(req: NextRequest) {
     );
   }
   const b = parsed.data;
+  // Sample mode (no real details set): the form works end to end for demos,
+  // but nothing is stored and the totals don't change.
   if (config.sample) {
-    return NextResponse.json(
-      { success: false, error: "These are sample details, so nothing was recorded. No money was moved." },
-      { status: 409 }
-    );
+    return NextResponse.json({ success: true, sample: true });
   }
   if (b.kind === "citizen" && !config.upi) {
     return NextResponse.json({ success: false, error: "UPI payments aren't open yet." }, { status: 409 });
