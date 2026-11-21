@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getNgoProfile, saveNgoProfile } from "@/lib/ngo/ngo-store";
 import { requireNgo } from "@/lib/auth/request-guards";
 import { bodyTooLarge, checkLogo } from "@/lib/security/uploads";
+import { publicLogoUrl } from "@/lib/public/fixes";
+
+const LOGO_ROUTE = "/api/public/ngo-logo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,15 +13,19 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const profile = await getNgoProfile();
-    return NextResponse.json({
-      success: true,
-      profile: {
-        name: profile.name,
-        logoUrl: profile.logoUrl || "",
-        verified: profile.verified,
-        lastUpdated: profile.lastUpdated,
+    return NextResponse.json(
+      {
+        success: true,
+        profile: {
+          name: profile.name,
+          // A short, cacheable image URL instead of the ~90 KB inline data URL.
+          logoUrl: publicLogoUrl(profile.logoUrl) || "",
+          verified: profile.verified,
+          lastUpdated: profile.lastUpdated,
+        },
       },
-    });
+      { headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=600" } }
+    );
   } catch {
     return NextResponse.json({ success: false, error: "Failed to load NGO profile" }, { status: 500 });
   }
@@ -35,7 +42,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { name, logoUrl, contactEmail } = body || {};
+    const { name, logoUrl: rawLogo, contactEmail } = body || {};
 
     const cleanName = typeof name === "string" ? name.replace(/[\u0000-\u001f<>]/g, "").trim() : "";
     if (cleanName.length < 2 || cleanName.length > 80) {
@@ -45,6 +52,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // The desk sends back the URL it was given when the logo wasn't changed: keep the stored logo.
+    const keepLogo = typeof rawLogo === "string" && rawLogo.startsWith(LOGO_ROUTE);
+    const logoUrl: unknown = keepLogo ? (await getNgoProfile({ fresh: true })).logoUrl || "" : rawLogo;
     const logo = checkLogo(logoUrl);
     if (!logo.ok) return NextResponse.json({ success: false, error: logo.error }, { status: 400 });
 
@@ -64,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      profile: { name: updated.name, logoUrl: updated.logoUrl || "", verified: updated.verified, lastUpdated: updated.lastUpdated },
+      profile: { name: updated.name, logoUrl: publicLogoUrl(updated.logoUrl) || "", verified: updated.verified, lastUpdated: updated.lastUpdated },
     });
   } catch {
     return NextResponse.json({ success: false, error: "Failed to save NGO profile" }, { status: 500 });

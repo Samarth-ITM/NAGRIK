@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { Building2, Send, Ticket } from "lucide-react";
 import { PUBLIC_BOT_URL } from "@/lib/telegram/public";
-import { NgoFixStack } from "@/components/public/ngo-fix-stack";
+import { NgoFixStack, type NgoFixStackInitial } from "@/components/public/ngo-fix-stack";
 import { IssueStrip } from "@/components/public/issue-icons";
 
-export function Hero() {
+export function Hero({ initialFixes }: { initialFixes?: NgoFixStackInitial | null } = {}) {
   return (
     <section className="nk-hero">
       <div aria-hidden className="nk-hero__grid-texture" />
@@ -43,7 +43,7 @@ export function Hero() {
             <h2>Recently fixed</h2>
             <Link href="/#issues">See the map</Link>
           </div>
-          <NgoFixStack />
+          <NgoFixStack initial={initialFixes} />
         </div>
       </div>
 

@@ -93,9 +93,14 @@ function FixCard({ fix }: { fix: PublicFix }) {
   );
 }
 
-export function NgoFixStack() {
-  const [fixes, setFixes] = useState<PublicFix[] | null>(null);
-  const [profileLogo, setProfileLogo] = useState<string | null>(null);
+export interface NgoFixStackInitial {
+  fixes: PublicFix[];
+  profileLogoUrl: string | null;
+}
+
+export function NgoFixStack({ initial }: { initial?: NgoFixStackInitial | null } = {}) {
+  const [fixes, setFixes] = useState<PublicFix[] | null>(initial ? initial.fixes : null);
+  const [profileLogo, setProfileLogo] = useState<string | null>(initial?.profileLogoUrl ?? null);
   const [failed, setFailed] = useState(false);
   const [active, setActive] = useState(0);
   const [userPaused, setUserPaused] = useState(false);
@@ -105,8 +110,10 @@ export function NgoFixStack() {
   const regionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // Server already rendered the list into the page: nothing to wait for.
+    if (initial) return;
     let cancelled = false;
-    fetch("/api/public/fixes", { cache: "no-store" })
+    fetch("/api/public/fixes")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((data) => {
         if (cancelled) return;
@@ -122,7 +129,7 @@ export function NgoFixStack() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initial]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
