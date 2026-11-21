@@ -21,7 +21,36 @@ export interface FundingConfig {
   bank: BankDetails | null;
   registrations: { label: string; value: string }[];
   contactEmail: string | null;
+  /** True when no real details are configured and the clearly labelled sample set is shown. */
+  sample: boolean;
 }
+
+/**
+ * Shown only while no real details are set. Every value is a format example that
+ * cannot receive money (the UPI handle and IFSC bank code don't exist), and the page
+ * marks the whole panel as a sample with payments switched off.
+ */
+const SAMPLE_CONFIG: FundingConfig = {
+  beneficiary: "Nagrik Civic Repairs Trust (sample)",
+  upi: { id: "nagriktrust@sample", payeeName: "Nagrik Civic Repairs Trust" },
+  bank: {
+    accountName: "Nagrik Civic Repairs Trust",
+    accountNumber: "000123456789",
+    ifsc: "SMPL0000001",
+    bankName: "Sample Bank",
+    branch: "Kharghar, Navi Mumbai",
+    accountType: "Current account",
+  },
+  registrations: [
+    { label: "PAN", value: "AAATN0000S" },
+    { label: "GSTIN", value: "27AAATN0000S1ZS" },
+    { label: "CSR-1 registration", value: "CSR00000000" },
+    { label: "12A", value: "AAATN0000SE20261" },
+    { label: "80G", value: "AAATN0000SF20261" },
+  ],
+  contactEmail: "funding@example.org",
+  sample: true,
+};
 
 const env = (k: string) => (process.env[k] || "").trim();
 
@@ -30,6 +59,7 @@ const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const ACCOUNT_RE = /^\d{9,18}$/;
 const PAN_RE = /^[A-Z]{5}\d{4}[A-Z]$/;
 const CSR1_RE = /^CSR\d{8}$/;
+const GSTIN_RE = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
 function clean(text: string, max = 120): string {
@@ -64,6 +94,8 @@ export function getFundingConfig(): FundingConfig {
   const registrations: { label: string; value: string }[] = [];
   const pan = env("FUND_NGO_PAN").toUpperCase();
   if (PAN_RE.test(pan)) registrations.push({ label: "PAN", value: pan });
+  const gstin = env("FUND_NGO_GSTIN").toUpperCase();
+  if (GSTIN_RE.test(gstin)) registrations.push({ label: "GSTIN", value: gstin });
   const csr1 = env("FUND_NGO_CSR1").toUpperCase();
   if (CSR1_RE.test(csr1)) registrations.push({ label: "CSR-1 registration", value: csr1 });
   const r12a = clean(env("FUND_NGO_12A"), 60);
@@ -73,7 +105,11 @@ export function getFundingConfig(): FundingConfig {
 
   const email = env("FUND_CONTACT_EMAIL");
 
+  // Nothing real configured yet: show the labelled sample set (unless FUND_SAMPLE=off).
+  if (!upi && !bank) return env("FUND_SAMPLE") === "off" ? { ...SAMPLE_CONFIG, upi: null, bank: null, registrations: [], beneficiary: null, contactEmail: null, sample: false } : SAMPLE_CONFIG;
+
   return {
+    sample: false,
     beneficiary,
     upi,
     bank,

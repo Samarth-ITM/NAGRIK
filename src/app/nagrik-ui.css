@@ -2847,3 +2847,14 @@ html {
 }
 .nk-fund__recent-name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nk-fund__recent-amt { margin-left: auto; font-weight: 800; }
+.nk-fund__sample {
+  margin-bottom: 1.1rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.7rem;
+  background: #fff3cd;
+  border: 1px solid #f3d27a;
+  color: #6b4a00;
+  font-size: 0.9rem;
+}
+.nk-fund__sample strong { font-weight: 800; }
+.nk-fund__qr-wrap--sample .nk-fund__qr { opacity: 0.35; }

@@ -84,6 +84,12 @@ export async function POST(req: NextRequest) {
     );
   }
   const b = parsed.data;
+  if (config.sample) {
+    return NextResponse.json(
+      { success: false, error: "These are sample details, so nothing was recorded. No money was moved." },
+      { status: 409 }
+    );
+  }
   if (b.kind === "citizen" && !config.upi) {
     return NextResponse.json({ success: false, error: "UPI payments aren't open yet." }, { status: 409 });
   }
