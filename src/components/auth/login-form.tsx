@@ -620,7 +620,7 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
                   </div>
 
                   {ngoAuthed ? (
-                    <p className="nk-hint">You're signed in to the field desk on this browser.</p>
+                    <p className="nk-hint">You&apos;re signed in to the field desk on this browser.</p>
                   ) : (
                   <div>
                     <label htmlFor="ngo-pass" className="nk-label">

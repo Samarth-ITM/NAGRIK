@@ -18,7 +18,7 @@ export interface RateLimitResult {
   retryAfterSeconds: number;
 }
 
-function useDb(): boolean {
+function isDbEnabled(): boolean {
   return isSupabaseConfigured() && g.__nagrikRateDb !== false;
 }
 
@@ -46,7 +46,7 @@ function memoryHit(key: string, limit: number, windowMs: number): RateLimitResul
 
 /** Counts one hit against `key`. */
 export async function rateLimit(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
-  if (useDb()) {
+  if (isDbEnabled()) {
     try {
       const { data, error } = await appDb().rpc("rate_limit_hit", {
         p_key: key.slice(0, 200),
@@ -71,7 +71,7 @@ export async function rateLimit(key: string, limit: number, windowMs: number): P
 
 /** Checks `key` without counting a hit. */
 export async function isRateLimited(key: string, limit: number): Promise<RateLimitResult> {
-  if (useDb()) {
+  if (isDbEnabled()) {
     try {
       const { data, error } = await appDb()
         .from("rate_limit_hits")
@@ -106,7 +106,7 @@ export async function isRateLimited(key: string, limit: number): Promise<RateLim
 
 export async function resetRateLimit(key: string): Promise<void> {
   buckets.delete(key);
-  if (useDb()) {
+  if (isDbEnabled()) {
     try {
       await appDb().from("rate_limit_hits").delete().eq("key", key.slice(0, 200));
     } catch {
