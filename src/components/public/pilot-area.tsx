@@ -1,95 +1,79 @@
+import { Check, X } from "lucide-react";
 import { PILOT_CONFIG } from "@/lib/config/pilot";
-import { MapPin, Navigation, ShieldAlert, Check, X } from "lucide-react";
+
+const COVERED = [
+  "Garbage, overflowing bins and illegal dumping",
+  "Drains, stormwater and public sanitation",
+  "Water supply and public taps",
+  "Streetlights and electrical fixtures",
+  "Roads, footpaths and road safety",
+  "Parks, trees and green spaces",
+];
+
+const NOT_COVERED = [
+  "Inside college campuses or private plots",
+  "Roads inside housing societies",
+  "Shops and commercial premises",
+];
 
 export function PilotArea() {
   return (
-    <section id="pilot-area" className="py-16 md:py-24 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div className="max-w-6xl mx-auto px-4">
-        {/* Header */}
-        <div className="max-w-2xl mx-auto text-center space-y-3 mb-14">
-          <span className="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">
-            Operating Boundary
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Pilot Scope: Sector 4, Kharghar
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            To ensure high operational focus and rapid field verification, Nagrik begins with a controlled 500-metre demonstration perimeter.
+    <section id="pilot-area" className="nk-pilot">
+      <div className="nk-pilot__inner">
+        <div>
+          <h2 className="nk-h2">Where the pilot runs</h2>
+          <p className="nk-lede">
+            We&apos;re starting small so every report gets checked quickly: any civic problem in public spaces within{" "}
+            {PILOT_CONFIG.radiusMetres} metres of the ITM Skills University gate in Sector 4, Kharghar. If you share a
+            location outside it, the bot asks for one inside the area.
           </p>
-        </div>
 
-        {/* Pilot Detail Card */}
-        <div className="max-w-4xl mx-auto rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 overflow-hidden shadow-xs">
-          <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Col 1: Geography & Anchor */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-brand-50 dark:bg-brand-950 text-brand-600 flex items-center justify-center">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900 dark:text-white">
-                    {PILOT_CONFIG.name}
-                  </h3>
-                  <span className="text-[11px] font-mono text-slate-400">
-                    ID: {PILOT_CONFIG.id}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
-                <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <strong className="block text-slate-900 dark:text-white mb-0.5">
-                    Reference Anchor:
-                  </strong>
-                  {PILOT_CONFIG.anchorDescription}
-                  <span className="block text-[11px] text-slate-400 mt-1 font-mono">
-                    Lat: {PILOT_CONFIG.centreLatitude.toFixed(4)} &middot; Lon: {PILOT_CONFIG.centreLongitude.toFixed(4)}
-                  </span>
-                </div>
-
-                <div className="p-3 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <strong className="block text-slate-900 dark:text-white mb-0.5">
-                    Operating Radius:
-                  </strong>
-                  {PILOT_CONFIG.radiusMetres} metres straight-line Haversine geofence.
-                  <span className="block text-[11px] text-slate-400 mt-1">
-                    Reports originating outside this perimeter are transparently routed to out-of-area advisory without ticket creation.
-                  </span>
-                </div>
-              </div>
+          <div className="nk-pilot__lists">
+            <div>
+              <h3 className="nk-pilot__h3">You can report</h3>
+              <ul className="nk-pilot__list">
+                {COVERED.map((c) => (
+                  <li key={c}>
+                    <Check size={16} className="nk-pilot__yes" aria-hidden />
+                    {c}
+                  </li>
+                ))}
+              </ul>
             </div>
-
-            {/* Col 2: What is Included vs Excluded */}
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-slate-900 dark:text-white mb-3">
-                  Inclusion &amp; Exclusion Policy
-                </h4>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-start gap-2 text-emerald-800 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Included:</strong> Publicly accessible thoroughfares, footpaths, stormwater drains, public lighting, and municipal trash collection points.
-                    </span>
-                  </div>
-
-                  <div className="flex items-start gap-2 text-rose-800 dark:text-rose-300 bg-rose-50/60 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900/40">
-                    <X className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Excluded:</strong> Campus interior plots, private residential society roads, and commercial establishments unless explicitly authorised.
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-[11px] text-slate-400 flex items-center gap-1.5 pt-2">
-                <ShieldAlert className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span>Boundary shown is an illustrative pilot perimeter, not a surveyed municipal ward.</span>
-              </div>
+            <div>
+              <h3 className="nk-pilot__h3">Not covered yet</h3>
+              <ul className="nk-pilot__list">
+                {NOT_COVERED.map((c) => (
+                  <li key={c}>
+                    <X size={16} className="nk-pilot__no" aria-hidden />
+                    {c}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         </div>
+
+        <figure className="nk-pilot__figure">
+          <svg
+            viewBox="0 0 320 320"
+            role="img"
+            aria-label={`Pilot area: a circle of ${PILOT_CONFIG.radiusMetres} metres around the ITM gate`}
+          >
+            <circle cx="160" cy="160" r="150" className="nk-pilot__ring" />
+            <circle cx="160" cy="160" r="100" className="nk-pilot__ring nk-pilot__ring--inner" />
+            <circle cx="160" cy="160" r="50" className="nk-pilot__ring nk-pilot__ring--inner" />
+            <line x1="160" y1="160" x2="310" y2="160" className="nk-pilot__radius" />
+            <text x="235" y="150" textAnchor="middle" className="nk-pilot__label">
+              {PILOT_CONFIG.radiusMetres} m
+            </text>
+            <circle cx="160" cy="160" r="9" className="nk-pilot__pin" />
+            <circle cx="160" cy="160" r="3.5" fill="#fff" />
+          </svg>
+          <figcaption>
+            Centre: ITM Skills University main gate. The boundary is a pilot area, not an official municipal ward.
+          </figcaption>
+        </figure>
       </div>
     </section>
   );

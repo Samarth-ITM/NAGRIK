@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
+import { Sparkles } from "lucide-react";
 import type { SpotStatus } from "@/types";
 import {
   createSpotAction,
@@ -124,6 +125,14 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
   const [resolutionNote, setResolutionNote] = useState("");
   const [reviewNote, setReviewNote] = useState("");
   const [challengeNote, setChallengeNote] = useState("");
+  const [aiAssessment, setAiAssessment] = useState<{
+    status: "APPEARS_FIXED" | "APPEARS_NOT_FIXED" | "UNCERTAIN";
+    confidence: number;
+    reasoning: string;
+    suggestedFollowup?: string;
+    provider: string;
+  } | null>(null);
+  const [isCheckingAi, setIsCheckingAi] = useState<boolean>(false);
 
   const isDemo = workspace === "demo" || role === "demo_viewer";
 
@@ -399,6 +408,50 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
     }
   };
 
+  const handleRunAiCheck = async () => {
+    if (!selectedSpot) return;
+    setIsCheckingAi(true);
+    try {
+      const beforePhoto =
+        selectedSpot.evidence?.[0]?.storage_path ||
+        "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?w=600";
+      const afterPhoto =
+        selectedSpot.resolution_submission?.after_photo_url ||
+        "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=600";
+
+      const res = await fetch("/api/ai/assess-evidence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          beforePhotoUrl: beforePhoto,
+          afterPhotoUrl: afterPhoto,
+          categoryName: selectedSpot.category_name,
+          description: selectedSpot.public_summary || "Municipal infrastructure repair check",
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.assessment) {
+        setAiAssessment(data.assessment);
+      } else {
+        setAiAssessment({
+          status: "UNCERTAIN",
+          confidence: 0,
+          reasoning: data.error || "Unable to complete AI check. Offline fallback mode.",
+          provider: "offline",
+        });
+      }
+    } catch {
+      setAiAssessment({
+        status: "UNCERTAIN",
+        confidence: 0,
+        reasoning: "AI service request failed. Human verification required.",
+        provider: "error",
+      });
+    } finally {
+      setIsCheckingAi(false);
+    }
+  };
+
   const handleCitizenChallenge = async () => {
     if (!selectedSpot) return;
     setActionNotice(null);
@@ -427,7 +480,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
       {/* 1. TOP CONTROL BAR & SIMULATOR */}
       <div className="bg-slate-900 text-white rounded-xl p-4 shadow-sm border border-slate-800 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">
+          <div className="text-xs text-slate-400 font-semibold mb-1">
             Active Role Simulator (Governance & Tenant Scope)
           </div>
           <div className="flex flex-wrap gap-2">
@@ -437,10 +490,10 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                 setWorkspace("live");
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                role === "super_admin" && workspace === "live"
-                  ? "bg-brand-600 text-white font-bold ring-2 ring-brand-400"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-              }`}
+ role === "super_admin" && workspace === "live"
+ ? "bg-brand-600 text-white font-bold ring-2 ring-brand-400"
+ : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+ }`}
             >
               Super-Admin (Full Authority)
             </button>
@@ -450,10 +503,10 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                 setWorkspace("live");
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                role === "authority_water"
-                  ? "bg-blue-600 text-white font-bold ring-2 ring-blue-400"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-              }`}
+ role === "authority_water"
+ ? "bg-blue-600 text-white font-bold ring-2 ring-blue-400"
+ : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+ }`}
             >
               Water Supply Dept (Assigned Org)
             </button>
@@ -463,10 +516,10 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                 setWorkspace("live");
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                role === "authority_roads"
-                  ? "bg-purple-600 text-white font-bold ring-2 ring-purple-400"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-              }`}
+ role === "authority_roads"
+ ? "bg-purple-600 text-white font-bold ring-2 ring-purple-400"
+ : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+ }`}
             >
               Roads & Works (Assigned Org)
             </button>
@@ -476,10 +529,10 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                 setWorkspace("demo");
               }}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                isDemo
-                  ? "bg-amber-600 text-white font-bold ring-2 ring-amber-400"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-              }`}
+ isDemo
+ ? "bg-amber-600 text-white font-bold ring-2 ring-amber-400"
+ : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+ }`}
             >
               CIDCO Demo Viewer (Read-Only)
             </button>
@@ -489,11 +542,11 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-400">Workspace:</span>
           <span
-            className={`px-2.5 py-1 rounded text-xs font-bold tracking-wide ${
-              isDemo
-                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-            }`}
+            className={`px-2.5 py-1 rounded text-xs font-bold ${
+ isDemo
+ ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+ : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+ }`}
           >
             {isDemo ? "DEMO (SYNTHETIC)" : "LIVE (PRODUCTION PILOT)"}
           </span>
@@ -502,7 +555,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
 
       {/* 2. DEMO WATERMARK (When viewing demo records) */}
       {isDemo && (
-        <div className="bg-amber-500/10 border-2 border-amber-500/30 rounded-xl p-3 text-center text-amber-800 dark:text-amber-300 font-bold text-xs tracking-wider">
+        <div className="bg-amber-500/10 border-2 border-amber-500/30 rounded-xl p-3 text-center text-amber-800 dark:text-amber-300 font-bold text-xs ">
           DEMONSTRATION ENVIRONMENT — SAMPLE DATA — NOT CONNECTED TO CIDCO OR REAL CITIZENS
         </div>
       )}
@@ -511,10 +564,10 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
       {actionNotice && (
         <div
           className={`p-3 rounded-lg text-xs flex items-center justify-between border ${
-            actionNotice.type === "success"
-              ? "bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
-              : "bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
-          }`}
+ actionNotice.type === "success"
+ ? "bg-emerald-50 text-emerald-900 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
+ : "bg-rose-50 text-rose-900 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800"
+ }`}
         >
           <span>{actionNotice.message}</span>
           <button onClick={() => setActionNotice(null)} className="text-xs font-bold px-2">
@@ -558,16 +611,16 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                         <span className="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
                           {report.category_name}
                         </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 uppercase">
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 ">
                           {report.review_status || "new"}
                         </span>
                         {report.evidence_path && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-medium">
-                            📷 Photo Attached
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-medium">
+                             Photo Attached
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-xs text-slate-400 font-mono">
                         {report.latitude.toFixed(4)}, {report.longitude.toFixed(4)}
                       </span>
                     </div>
@@ -579,14 +632,14 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                     {/* Deterministic Duplicate Candidates Display (Haversine 0-10m) */}
                     {report.candidate_spots && report.candidate_spots.length > 0 && (
                       <div className="p-2 rounded bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-xs space-y-1">
-                        <span className="font-semibold text-amber-900 dark:text-amber-200 text-[11px]">
+                        <span className="font-semibold text-amber-900 dark:text-amber-200 text-xs">
                           Deterministic Duplicate Candidates (Haversine ≤ 10m):
                         </span>
                         <div className="flex flex-wrap gap-1.5 pt-1">
                           {report.candidate_spots.map((cand) => (
                             <div
                               key={cand.spot_id}
-                              className="inline-flex items-center gap-2 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-[11px]"
+                              className="inline-flex items-center gap-2 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs"
                             >
                               <span
                                 className={
@@ -602,7 +655,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                               </span>
                               <button
                                 onClick={() => handleLinkReport(report.id, cand.spot_id, cand.distance_m)}
-                                className="text-[10px] underline text-blue-600 hover:text-blue-700 font-semibold"
+                                className="text-xs underline text-blue-600 hover:text-blue-700 font-semibold"
                               >
                                 Link to this Spot
                               </button>
@@ -623,7 +676,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
 
                       {filteredSpots.length > 0 && (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-slate-400">or link to:</span>
+                          <span className="text-xs text-slate-400">or link to:</span>
                           <select
                             onChange={(e) => {
                               if (e.target.value) {
@@ -690,12 +743,12 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                   {role === "super_admin"
                     ? "Complete civic issues registry across Kharghar pilot."
                     : `Issues scoped exclusively to ${
-                        role === "authority_water"
-                          ? "Water Supply Department"
-                          : role === "authority_roads"
-                          ? "Roads & Works Department"
-                          : "CIDCO Sample Data"
-                      }.`}
+ role === "authority_water"
+ ? "Water Supply Department"
+ : role === "authority_roads"
+ ? "Roads & Works Department"
+ : "CIDCO Sample Data"
+ }.`}
                 </p>
               </div>
 
@@ -736,10 +789,10 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                       key={spot.id}
                       onClick={() => setSelectedSpot(spot)}
                       className={`cursor-pointer transition ${
-                        selectedSpot?.id === spot.id
-                          ? "bg-brand-50/50 dark:bg-brand-950/20 font-medium"
-                          : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                      }`}
+ selectedSpot?.id === spot.id
+ ? "bg-brand-50/50 dark:bg-brand-950/20 font-medium"
+ : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
+ }`}
                     >
                       <td className="py-3 px-3 font-mono font-bold text-brand-600 dark:text-brand-400">
                         {spot.spot_code}
@@ -755,7 +808,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                           <span className="italic text-slate-400">Unassigned</span>
                         )}
                       </td>
-                      <td className="py-3 px-3 text-slate-400 font-mono text-[11px]">
+                      <td className="py-3 px-3 text-slate-400 font-mono text-xs">
                         {new Date(spot.updated_at).toLocaleDateString()}
                       </td>
                     </tr>
@@ -785,7 +838,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                       {selectedSpot.spot_code}
                     </h2>
                     {selectedSpot.is_demo && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-semibold">
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-semibold">
                         DEMO
                       </span>
                     )}
@@ -798,7 +851,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
               {/* Coordinates and Assignment Info */}
               <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">
+                  <span className="text-slate-400 block text-xs font-semibold">
                     Canonical Anchor
                   </span>
                   <span className="font-mono text-slate-800 dark:text-slate-200">
@@ -807,7 +860,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">
+                  <span className="text-slate-400 block text-xs font-semibold">
                     Assigned Authority
                   </span>
                   <span className="text-slate-800 dark:text-slate-200 font-medium">
@@ -819,7 +872,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
               {/* Public Summary */}
               {selectedSpot.public_summary && (
                 <div>
-                  <span className="text-slate-400 block text-[10px] uppercase font-semibold mb-1">
+                  <span className="text-slate-400 block text-xs font-semibold mb-1">
                     Public Transparency Summary
                   </span>
                   <p className="text-xs text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded border border-slate-100 dark:border-slate-800">
@@ -830,7 +883,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
 
               {/* WORKFLOW ACTIONS BASED ON ROLE & STATUS */}
               <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <h4 className="text-xs font-bold text-slate-500">
                   Permitted Workflow Actions
                 </h4>
 
@@ -894,7 +947,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                         <span className="text-xs font-bold text-orange-900 dark:text-orange-300 block">
                           Review Authority Repair Submission
                         </span>
-                        <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                        <p className="text-xs text-slate-600 dark:text-slate-400">
                           Inspect mandatory after-repair photo evidence. Only super-admin approval can mark an issue RESOLVED.
                         </p>
                         <input
@@ -908,7 +961,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                           <Button
                             size="sm"
                             onClick={() => handleReviewResolution("approved")}
-                            className="flex-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                            className="flex-1 text-xs bg-brand-600 hover:bg-brand-700 text-white font-bold"
                           >
                             Approve (Mark RESOLVED)
                           </Button>
@@ -920,6 +973,55 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                           >
                             Reject & Request Proof
                           </Button>
+                        </div>
+
+                        {/* AI Vision Advisory Check (OpenAI) */}
+                        <div className="pt-2 border-t border-orange-200 dark:border-orange-800">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                              AI Vision Advisory Check
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleRunAiCheck}
+                              disabled={isCheckingAi}
+                              className="text-xs h-6 px-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                            >
+                              {isCheckingAi ? "Evaluating Photos..." : "Run AI Check"}
+                            </Button>
+                          </div>
+
+                          {aiAssessment && (
+                            <div className="p-2.5 rounded bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-xs space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className={`font-bold text-xs ${
+ aiAssessment.status === "APPEARS_FIXED"
+ ? "text-emerald-700 dark:text-emerald-400"
+ : aiAssessment.status === "APPEARS_NOT_FIXED"
+ ? "text-rose-700 dark:text-rose-400"
+ : "text-amber-700 dark:text-amber-400"
+ }`}>
+                                  Status: {aiAssessment.status}
+                                </span>
+                                <span className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">
+                                  Confidence: {Math.round(aiAssessment.confidence * 100)}%
+                                </span>
+                              </div>
+                              <p className="text-slate-600 dark:text-slate-300 text-xs leading-tight">
+                                {aiAssessment.reasoning}
+                              </p>
+                              {aiAssessment.suggestedFollowup && (
+                                <p className="text-amber-800 dark:text-amber-300 text-xs italic">
+                                  Recommendation: {aiAssessment.suggestedFollowup}
+                                </p>
+                              )}
+                              <div className="text-xs text-slate-400 dark:text-slate-500 italic pt-0.5 border-t border-indigo-100 dark:border-indigo-900/40">
+                                * Advisory suggestion only. Verification decision remains strictly with the human Super-Admin.
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -975,7 +1077,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                         <span className="text-xs font-bold text-blue-900 dark:text-blue-300 block">
                           Submit Repair Completion (Mandatory After-Photo)
                         </span>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-xs text-slate-500">
                           Authorities cannot resolve issues directly. You must attach an after-repair photo and note for super-admin verification.
                         </p>
                         <textarea
@@ -1036,7 +1138,7 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
 
               {/* STATUS HISTORY TIMELINE */}
               <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                <h4 className="text-xs font-bold text-slate-500">
                   Audit History & Transitions
                 </h4>
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -1046,9 +1148,9 @@ export function DashboardView({ initialSpots, initialUnlinkedReports, initialUse
                         key={i}
                         className="text-xs p-2 rounded bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 space-y-0.5"
                       >
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                        <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
                           <span>
-                            {h.previous_status || "INITIAL"} &rarr; {h.new_status}
+                            {h.previous_status || "INITIAL"} {h.new_status}
                           </span>
                           <span>{new Date(h.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                         </div>

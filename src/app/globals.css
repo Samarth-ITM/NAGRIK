@@ -3,25 +3,33 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Peach + saffron theme — light only, on every device */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0b1120;
-    --foreground: #f8fafc;
-  }
+  color-scheme: light;
+  --background: #fff4ec;
+  --foreground: #2f1f17;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-mukta), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", "Noto Sans", "Noto Sans Devanagari", Roboto, "Helvetica Neue", Arial, sans-serif;
   min-height: 100vh;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+::selection {
+  background: #ffd699;
+  color: #2f1f17;
+}
+
+/* Visible, consistent keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid #c46a00;
+  outline-offset: 2px;
 }
 
 /* Custom leaflet container tweaks */
@@ -30,4 +38,15 @@ body {
   height: 100%;
   border-radius: 0.5rem;
   z-index: 10;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

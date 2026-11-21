@@ -24,6 +24,7 @@ export interface ProcessedMedia {
   fileSizeBytes: number;
   sha256: string;
   telegramFileUniqueId: string;
+  buffer?: Buffer;
 }
 
 /**
@@ -122,6 +123,7 @@ export class TelegramMediaService {
       fileSizeBytes: buffer.length,
       sha256,
       telegramFileUniqueId: fileUniqueId || fileMeta.file_unique_id,
+      buffer,
     };
   }
 
@@ -162,6 +164,7 @@ export class TelegramMediaService {
       fileSizeBytes: buffer.length,
       sha256,
       telegramFileUniqueId: fileUniqueId || fileMeta.file_unique_id,
+      buffer,
     };
   }
 

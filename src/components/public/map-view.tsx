@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import type { DemoSpot } from "@/lib/demo/demo-issues";
+import { statusLabel } from "@/components/shared/status-badge";
 
 interface MapViewProps {
   spots: DemoSpot[];
@@ -15,9 +16,9 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<{ [id: string]: L.CircleMarker }>({});
 
-  const PILOT_ANCHOR_LAT = 19.0475;
-  const PILOT_ANCHOR_LON = 73.0699;
-  const PILOT_RADIUS_METRES = 500;
+  const PILOT_ANCHOR_LAT = 19.0338;
+  const PILOT_ANCHOR_LON = 73.0630;
+  const PILOT_RADIUS_METRES = 2000;
 
   useEffect(() => {
     if (!mapContainerRef.current) return;
@@ -55,12 +56,12 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
     );
 
     geofenceCircle.bindPopup(`
-      <div style="font-family: inherit; font-size: 11px; line-height: 1.4; max-width: 200px;">
-        <strong style="color: #1e40af;">Illustrative Reference Perimeter</strong><br/>
-        500m straight-line radius from ITM public entrance.<br/>
-        <span style="color: #64748b; font-size: 10px;">Demonstration boundary; not an officially surveyed municipal ward boundary.</span>
-      </div>
-    `);
+ <div style="font-family: inherit; font-size: 11px; line-height: 1.4; max-width: 200px;">
+ <strong style="color: #1e40af;">Illustrative Reference Perimeter</strong><br/>
+ 500m straight-line radius from ITM public entrance.<br/>
+ <span style="color: #64748b; font-size: 10px;">Demonstration boundary; not an officially surveyed municipal ward boundary.</span>
+ </div>
+ `);
 
     // Pilot Center Anchor Marker
     const anchorMarker = L.circleMarker([PILOT_ANCHOR_LAT, PILOT_ANCHOR_LON], {
@@ -73,12 +74,12 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
     }).addTo(map);
 
     anchorMarker.bindPopup(`
-      <div style="font-family: inherit; font-size: 12px; line-height: 1.4;">
-        <strong style="color: #1e3a8a;">Pilot Reference Anchor</strong><br/>
-        ITM Skills University Public Entrance<br/>
-        Sector 4, Kharghar (Immutable Benchmark)
-      </div>
-    `);
+ <div style="font-family: inherit; font-size: 12px; line-height: 1.4;">
+ <strong style="color: #1e3a8a;">Pilot Reference Anchor</strong><br/>
+ ITM Skills University Public Entrance<br/>
+ Sector 4, Kharghar (Immutable Benchmark)
+ </div>
+ `);
 
     mapInstanceRef.current = map;
 
@@ -116,18 +117,18 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
       }).addTo(map);
 
       const popupHtml = `
-        <div style="font-family: inherit; font-size: 12px; max-width: 220px; line-height: 1.4;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <span style="font-weight: 700; color: #0f172a;">${spot.spot_code}</span>
-            <span style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #f1f5f9; font-weight: 600;">${spot.status.replace(/_/g, " ")}</span>
-          </div>
-          <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${spot.title}</div>
-          <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">${spot.category_name}</div>
-          <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 4px;">
-            ${spot.report_count} citizen report${spot.report_count > 1 ? "s" : ""} &middot; Sample Data
-          </div>
-        </div>
-      `;
+ <div style="font-family: inherit; font-size: 12px; max-width: 220px; line-height: 1.4;">
+ <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+ <span style="font-weight: 700; color: #0f172a;">${spot.spot_code}</span>
+ <span style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #f1f5f9; font-weight: 600;">${statusLabel(spot.status)}</span>
+ </div>
+ <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${spot.title}</div>
+ <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">${spot.category_name}</div>
+ <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 4px;">
+ ${spot.report_count} citizen report${spot.report_count > 1 ? "s" : ""} &middot; Sample Data
+ </div>
+ </div>
+ `;
 
       marker.bindPopup(popupHtml);
 

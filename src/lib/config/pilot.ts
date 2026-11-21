@@ -17,9 +17,9 @@ export const PILOT_CONFIG: PilotConfig = {
   id: "kharghar_itm_v1",
   name: "ITM Sector 4, Kharghar",
   anchorDescription: "ITM Skills University main public entrance",
-  radiusMetres: 500,
-  // Preliminary coordinates; verified via map pin before deployment (TRD Section 4.1)
-  centreLatitude: 19.0475,
-  centreLongitude: 73.0699,
+  radiusMetres: Number(process.env.PILOT_RADIUS_METRES) || 2000,
+  // Coordinates verified for ITM Skills University / ITM Campus, Sector 4, Kharghar
+  centreLatitude: Number(process.env.PILOT_CENTRE_LAT) || 19.0338,
+  centreLongitude: Number(process.env.PILOT_CENTRE_LON) || 73.0630,
   enabled: true,
 } as const;

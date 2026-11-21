@@ -15,20 +15,17 @@ export function CategoryExplorer() {
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="max-w-2xl mx-auto text-center space-y-3 mb-10">
-          <span className="text-xs font-bold text-brand-600 dark:text-brand-400 uppercase tracking-wider">
-            Issue Taxonomy
-          </span>
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-            Structured Civic Categorisation
+            What you can report
           </h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Nagrik organises citizen submissions into a standard 3 × 4 × (4 + Other) taxonomy, eliminating classification ambiguity across municipal departments.
+            Every report goes into one of three groups and twelve categories, so it reaches the right team the first time. Can't find yours? Choose “Other” and describe it.
           </p>
 
           {/* Language Switcher */}
-          <div className="pt-2 flex items-center justify-center gap-1.5">
-            <span className="text-xs text-slate-400 flex items-center gap-1 mr-1">
-              <Globe className="w-3.5 h-3.5" /> Language:
+          <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+            <span className="text-xs text-slate-500 font-semibold flex items-center gap-1.5 mr-1">
+              <Globe className="w-4 h-4 text-emerald-600" /> Language:
             </span>
             {(
               [
@@ -40,11 +37,12 @@ export function CategoryExplorer() {
               <button
                 key={lang.code}
                 onClick={() => setActiveLang(lang.code)}
-                className={`text-xs px-2.5 py-1 rounded-md font-medium transition focus:outline-none focus:ring-2 focus:ring-brand-500 ${
-                  activeLang === lang.code
-                    ? "bg-brand-600 text-white shadow-xs"
-                    : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100"
-                }`}
+                className={`text-xs px-3.5 py-2 min-h-[44px] rounded-xl font-bold transition focus:outline-none focus:ring-2 focus:ring-brand-500 ${
+ activeLang === lang.code
+ ? "bg-brand-600 text-white shadow-xs"
+ : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+ }`}
+                aria-pressed={activeLang === lang.code}
               >
                 {lang.label}
               </button>
@@ -61,13 +59,13 @@ export function CategoryExplorer() {
                 key={group.groupId}
                 onClick={() => setSelectedGroupIndex(idx)}
                 className={`p-4 rounded-xl border text-left transition relative flex flex-col justify-between focus:outline-none focus:ring-2 focus:ring-brand-500 ${
-                  isSelected
-                    ? "bg-white dark:bg-slate-900 border-brand-500 shadow-sm ring-1 ring-brand-500/20"
-                    : "bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900"
-                }`}
+ isSelected
+ ? "bg-white dark:bg-slate-900 border-brand-500 shadow-sm ring-1 ring-brand-500/20"
+ : "bg-white/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-900"
+ }`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">
+                  <span className="text-xs font-semibold text-brand-600 dark:text-brand-400">
                     Group {idx + 1}
                   </span>
                   {isSelected && <Check className="w-4 h-4 text-brand-600" />}
@@ -75,7 +73,7 @@ export function CategoryExplorer() {
                 <h3 className="font-bold text-sm text-slate-900 dark:text-white">
                   {getResolvedLabel(group.label, activeLang)}
                 </h3>
-                <span className="text-[11px] text-slate-400 mt-1">
+                <span className="text-xs text-slate-400 mt-1">
                   4 categories &middot; 20 leaf options
                 </span>
               </button>
@@ -107,9 +105,6 @@ export function CategoryExplorer() {
                   <span className="text-xs font-bold text-slate-900 dark:text-white">
                     {catIdx + 1}. {getResolvedLabel(cat.label, activeLang)}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400">
-                    {cat.categoryId}
-                  </span>
                 </div>
 
                 <ul className="space-y-1.5">
@@ -121,7 +116,7 @@ export function CategoryExplorer() {
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600 shrink-0" />
                       <span>{getResolvedLabel(opt.label, activeLang)}</span>
                       {opt.issueTypeId === "other" && (
-                        <span className="text-[10px] px-1 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                        <span className="text-xs px-1 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
                           Requires description
                         </span>
                       )}

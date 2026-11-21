@@ -1,97 +1,200 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Shield, Menu, X, ArrowUpRight } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Menu, Send, Shield, X } from "lucide-react";
+import { PUBLIC_BOT_URL } from "@/lib/telegram/public";
+
+const NAV = [
+  { label: "How it works", href: "/#how-it-works", section: "how-it-works" },
+  { label: "What to report", href: "/#categories", section: "categories" },
+  { label: "Map", href: "/#issues", section: "issues" },
+  { label: "Privacy", href: "/privacy" },
+  { label: "About", href: "/about" },
+];
 
 export function Header() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [partner, setPartner] = useState<{ name: string; logoUrl?: string } | null>(null);
 
-  const navLinks = [
-    { label: "Home", href: "/" },
-    { label: "How It Works", href: "/#how-it-works" },
-    { label: "Issue Categories", href: "/#categories" },
-    { label: "Public Issues", href: "/#issues" },
-    { label: "Accountability", href: "/#accountability" },
-    { label: "Pilot Area", href: "/#pilot-area" },
-    { label: "About", href: "/#about" },
-  ];
+  useEffect(() => {
+    fetch("/api/ngo/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.success && data.profile?.name) setPartner(data.profile);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Highlight the menu item for the section currently on screen (home page only).
+  useEffect(() => {
+    if (pathname !== "/") {
+      setActiveSection(null);
+      return;
+    }
+    const ids = NAV.filter((n) => n.section).map((n) => n.section as string);
+    // Sections in page order; the active one is the last whose top has passed just below the header.
+    const LINE = 120;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      let current: string | null = null;
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top <= LINE) current = id;
+      }
+      // Past the last tracked section (e.g. lower sections without a menu item): clear the highlight.
+      const last = ids.length ? document.getElementById(ids[ids.length - 1]) : null;
+      if (current && current === ids[ids.length - 1] && last && last.getBoundingClientRect().bottom < LINE) {
+        current = null;
+      }
+      setActiveSection(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [pathname]);
+
+  // Close the phone menu on navigation or Escape.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const isActive = (n: (typeof NAV)[number]) =>
+    n.section ? pathname === "/" && activeSection === n.section : pathname === n.href;
 
   return (
-    <header className="border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md sticky top-0 z-50">
-      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        {/* Brand */}
-        <Link href="/" className="flex items-center gap-2.5 font-bold text-slate-900 dark:text-white group focus:outline-none focus:ring-2 focus:ring-brand-500 rounded-lg">
-          <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white shadow-sm shadow-brand-500/20 group-hover:bg-brand-700 transition">
-            <Shield className="w-4 h-4" />
-          </div>
-          <div className="flex flex-col">
-            <span className="leading-none text-base tracking-tight font-extrabold text-slate-900 dark:text-white">
-              NAGRIK
-            </span>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium tracking-normal">
-              Sector 4, Kharghar
-            </span>
-          </div>
+    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-slate-50/85 backdrop-blur-md">
+      <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+        <Link href="/" className="flex items-center gap-2.5 shrink-0 rounded-lg" aria-label="Nagrik home">
+          <span className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center">
+            <Shield className="w-[18px] h-[18px]" aria-hidden />
+          </span>
+          <span className="leading-tight">
+            <span className="block text-[17px] font-extrabold tracking-tight text-slate-900">Nagrik</span>
+            <span className="block text-xs text-slate-500">Sector 4, Kharghar</span>
+          </span>
         </Link>
 
-        {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-600 dark:text-slate-300">
-          {navLinks.map((link) => (
-            <Link
-              key={link.label}
-              href={link.href}
-              className="hover:text-brand-600 dark:hover:text-brand-400 transition focus:outline-none focus:ring-2 focus:ring-brand-500 rounded px-1 py-0.5"
-            >
-              {link.label}
-            </Link>
-          ))}
+        <nav aria-label="Main" className="hidden md:flex items-center gap-1">
+          {NAV.map((n) => {
+            const active = isActive(n);
+            return (
+              <Link
+                key={n.href}
+                href={n.href}
+                aria-current={active ? "page" : undefined}
+                className={`relative whitespace-nowrap px-3 py-2 rounded-lg text-[15px] font-medium transition-colors ${
+                  active ? "text-slate-900" : "text-slate-600 hover:text-slate-900 hover:bg-white/70"
+                }`}
+              >
+                {n.label}
+                <span
+                  aria-hidden
+                  className={`absolute left-3 right-3 -bottom-[13px] h-[3px] rounded-full bg-brand-500 transition-opacity duration-300 ${
+                    active ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+              </Link>
+            );
+          })}
         </nav>
 
-        {/* Actions */}
-        <div className="hidden md:flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {partner && (
+            <Link
+              href="/ngo"
+              title={`Repairs by ${partner.name}`}
+              className="hidden xl:flex items-center gap-2 max-w-[13rem] pl-1.5 pr-3 py-1 rounded-full border border-slate-200 bg-white text-sm text-slate-700 hover:border-brand-300 transition-colors"
+            >
+              {partner.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={partner.logoUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
+              ) : (
+                <span className="w-6 h-6 rounded-full bg-emerald-600" aria-hidden />
+              )}
+              <span className="truncate">{partner.name}</span>
+            </Link>
+          )}
           <Link
-            href="/login"
-            className="text-xs px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition inline-flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            href="/login?role=citizen"
+            className="hidden sm:inline-flex items-center h-10 px-4 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-800 hover:border-slate-400 transition-colors whitespace-nowrap"
           >
-            <span>Authority Login</span>
-            <ArrowUpRight className="w-3.5 h-3.5 opacity-60" />
+            My tickets
           </Link>
+          <Link
+            href="/ngo"
+            className="hidden sm:inline-flex items-center h-10 px-4 rounded-xl bg-brand-600 text-sm font-semibold text-white hover:bg-brand-700 transition-colors whitespace-nowrap"
+          >
+            NGO desk
+          </Link>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="md:hidden w-11 h-11 flex items-center justify-center rounded-xl text-slate-800 hover:bg-white transition-colors"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            aria-controls="mobile-menu"
+          >
+            {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
-
-        {/* Mobile menu toggle */}
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="md:hidden p-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition focus:outline-none focus:ring-2 focus:ring-brand-500"
-          aria-label="Toggle navigation menu"
-        >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
       </div>
 
-      {/* Mobile Nav dropdown */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-4 space-y-3">
-          <div className="flex flex-col space-y-2">
-            {navLinks.map((link) => (
+      {open && (
+        <div id="mobile-menu" className="md:hidden border-t border-slate-200 bg-slate-50 px-4 pt-3 pb-5">
+          <a
+            href={PUBLIC_BOT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 h-12 rounded-xl bg-brand-500 text-slate-900 font-bold"
+          >
+            <Send className="w-4 h-4" aria-hidden />
+            Report on Telegram
+          </a>
+          <nav aria-label="Main" className="mt-3 grid">
+            {NAV.map((n) => (
               <Link
-                key={link.label}
-                href={link.href}
-                onClick={() => setMobileMenuOpen(false)}
-                className="px-2 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition"
+                key={n.href}
+                href={n.href}
+                onClick={() => setOpen(false)}
+                className="flex items-center min-h-[48px] px-3 rounded-lg text-base font-medium text-slate-800 hover:bg-white"
               >
-                {link.label}
+                {n.label}
               </Link>
             ))}
-          </div>
-          <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+          </nav>
+          <div className="mt-3 pt-3 border-t border-slate-200 grid grid-cols-2 gap-2">
             <Link
-              href="/login"
-              onClick={() => setMobileMenuOpen(false)}
-              className="w-full text-center block text-xs px-3.5 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition"
+              href="/login?role=citizen"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-center h-11 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-800"
             >
-              Authority Login
+              My tickets
+            </Link>
+            <Link
+              href="/ngo"
+              onClick={() => setOpen(false)}
+              className="flex items-center justify-center h-11 rounded-xl bg-brand-600 text-sm font-semibold text-white"
+            >
+              NGO desk
             </Link>
           </div>
         </div>

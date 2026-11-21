@@ -70,22 +70,22 @@ export default async function DashboardPage() {
     let spotsQuery = (supabase as any)
       .from("spots")
       .select(`
-        id,
-        spot_code,
-        category_id,
-        issue_type_id,
-        status,
-        severity_label,
-        canonical_latitude,
-        canonical_longitude,
-        assigned_organisation_id,
-        public_approved,
-        is_demo,
-        created_at,
-        updated_at,
-        resolved_at,
-        organisations ( name )
-      `)
+ id,
+ spot_code,
+ category_id,
+ issue_type_id,
+ status,
+ severity_label,
+ canonical_latitude,
+ canonical_longitude,
+ assigned_organisation_id,
+ public_approved,
+ is_demo,
+ created_at,
+ updated_at,
+ resolved_at,
+ organisations ( name )
+ `)
       .order("updated_at", { ascending: false });
 
     if (isDemo) {
@@ -132,24 +132,24 @@ export default async function DashboardPage() {
       const { data: reportsData } = await (supabase as any)
         .from("reports")
         .select(`
-          id,
-          ticket_code,
-          category_id,
-          description_private,
-          latitude,
-          longitude,
-          review_status,
-          created_at,
-          evidence ( storage_path_private )
-        `)
+ id,
+ ticket_code,
+ category_id,
+ description_private,
+ latitude,
+ longitude,
+ review_status,
+ created_at,
+ evidence ( storage_path_private )
+ `)
         .is("spot_id", null)
         .eq("is_demo", false)
         .order("created_at", { ascending: false });
 
       if (reportsData && reportsData.length > 0) {
         unlinkedReports = (reportsData as any[]).map((r: any) => {
-          const lat = Number(r.latitude || 19.0475);
-          const lon = Number(r.longitude || 73.0699);
+          const lat = Number(r.latitude || 19.0338);
+          const lon = Number(r.longitude || 73.0630);
 
           // Deterministic duplicate candidate calculation against existing spots
           const candidates = spots

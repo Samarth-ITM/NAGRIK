@@ -10,9 +10,9 @@ export const envSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
   APP_ENV: z.enum(["development", "preview", "production", "test"]).default("development"),
   PILOT_ID: z.string().default("kharghar_itm_v1"),
-  PILOT_RADIUS_METRES: z.coerce.number().default(500),
-  PILOT_CENTRE_LAT: z.coerce.number().default(19.0475),
-  PILOT_CENTRE_LON: z.coerce.number().default(73.0699),
+  PILOT_RADIUS_METRES: z.coerce.number().default(2000),
+  PILOT_CENTRE_LAT: z.coerce.number().default(19.0338),
+  PILOT_CENTRE_LON: z.coerce.number().default(73.0630),
 
   // Supabase
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
@@ -36,6 +36,9 @@ export const envSchema = z.object({
     .string()
     .transform((val) => val === "true")
     .default("false"),
+  AI_PROVIDER: z.enum(["openai", "gemini"]).default("openai"),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default("gpt-4o-mini"),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
   AI_VOICE_TRANSCRIPTION_ENABLED: z

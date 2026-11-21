@@ -66,6 +66,7 @@ export interface TelegramReplyKeyboardMarkup {
   keyboard: TelegramKeyboardButton[][];
   resize_keyboard?: boolean;
   one_time_keyboard?: boolean;
+  is_persistent?: boolean;
 }
 
 export interface TelegramReplyKeyboardRemove {
@@ -115,23 +116,37 @@ export interface TelegramFile {
 
 export type ConversationState =
   | "IDLE"
+  | "AWAITING_AUTH_NAME"
+  | "AWAITING_AUTH_PASSWORD"
+  | "AWAITING_SESSION_PASSWORD"
   | "AWAITING_LANGUAGE"
   | "AWAITING_GROUP"
   | "AWAITING_CATEGORY"
   | "AWAITING_ISSUE_TYPE"
+  | "AWAITING_VOICE_DESCRIPTION"
+  | "CONFIRM_VOICE_TRANSCRIPT"
   | "AWAITING_DESCRIPTION"
   | "AWAITING_LOCATION"
   | "AWAITING_PHOTO"
+  | "AWAITING_PHOTO_RETRY"
   | "AWAITING_VOICE"
   | "CONFIRM_SUBMISSION";
 
 export interface DraftPayload {
+  sessionUnlocked?: boolean;
+  authNamePending?: string;
   language?: "en" | "hi" | "mr";
+  /** Set when the citizen tapped "Report" — after picking a language we go straight into the report flow. */
+  reportAfterLanguage?: boolean;
+  /** When the citizen last picked a language (ms). "Report" skips the language question for 15 minutes. */
+  languageChosenAt?: number;
   groupId?: string;
   categoryId?: string;
   issueTypeId?: string;
   customIssueNote?: string;
   description?: string;
+  transcriptPending?: string;
+  voiceTranscript?: string;
   latitude?: number;
   longitude?: number;
   horizontalAccuracyM?: number;
@@ -141,6 +156,10 @@ export interface DraftPayload {
   photoSizeBytes?: number;
   photoSha256?: string;
   photoFileUniqueId?: string;
+  photoValidationStatus?: "MATCH" | "MISMATCH" | "UNCLEAR" | "UNVERIFIED";
+  photoValidationReason?: string;
+  validatedPhotoSha256?: string;
+  validatedIssueTypeId?: string;
   voiceStoragePath?: string;
   voiceSizeBytes?: number;
   voiceSha256?: string;

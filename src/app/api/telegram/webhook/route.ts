@@ -64,12 +64,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Record as received
-    await (supabase as any).from("telegram_updates").upsert({
-      update_id: updateId,
-      received_at: new Date().toISOString(),
-      processing_status: "received",
-    });
+    // (No separate "received" write: the single upsert after processing records it,
+    // saving a database round trip on every tap.)
   } catch (err) {
     // If table write fails, proceed with conversation handling
     console.warn("Update tracking notice:", err instanceof Error ? err.message : err);
@@ -77,31 +73,30 @@ export async function POST(req: NextRequest) {
 
   // 4. Delegate to Conversational FSM
   const fsm = new TelegramConversationFSM();
+  const receivedAt = new Date().toISOString();
   try {
     await fsm.handleUpdate(update);
 
     // Mark update processed
-    await (supabase as any)
-      .from("telegram_updates")
-      .update({
-        processed_at: new Date().toISOString(),
-        processing_status: "processed",
-      })
-      .eq("update_id", updateId);
+    await (supabase as any).from("telegram_updates").upsert({
+      update_id: updateId,
+      received_at: receivedAt,
+      processed_at: new Date().toISOString(),
+      processing_status: "processed",
+    });
 
     return NextResponse.json({ ok: true, update_id: updateId }, { status: 200 });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Unknown error";
     console.error(`Telegram update ${updateId} processing error: ${errorMsg}`);
 
-    await (supabase as any)
-      .from("telegram_updates")
-      .update({
-        processed_at: new Date().toISOString(),
-        processing_status: "failed",
-        failure_reason: errorMsg.slice(0, 500),
-      })
-      .eq("update_id", updateId);
+    await (supabase as any).from("telegram_updates").upsert({
+      update_id: updateId,
+      received_at: receivedAt,
+      processed_at: new Date().toISOString(),
+      processing_status: "failed",
+      failure_reason: errorMsg.slice(0, 500),
+    });
 
     // Return 200 to prevent Telegram from looping retries indefinitely on broken updates
     return NextResponse.json(

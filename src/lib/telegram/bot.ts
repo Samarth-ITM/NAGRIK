@@ -81,11 +81,17 @@ export class TelegramBotClient {
     text?: string,
     showAlert: boolean = false
   ): Promise<boolean> {
-    return this.post("answerCallbackQuery", {
-      callback_query_id: callbackQueryId,
-      text,
-      show_alert: showAlert,
-    });
+    try {
+      await this.post("answerCallbackQuery", {
+        callback_query_id: callbackQueryId,
+        text,
+        show_alert: showAlert,
+      });
+      return true;
+    } catch {
+      // Already answered or expired: harmless, never fail the update over it.
+      return false;
+    }
   }
 
   /**
@@ -95,10 +101,55 @@ export class TelegramBotClient {
     chatId: number | string,
     action: "typing" | "upload_photo" | "record_voice" | "find_location" = "typing"
   ): Promise<boolean> {
-    return this.post("sendChatAction", {
-      chat_id: chatId,
-      action,
-    });
+    try {
+      return await this.post("sendChatAction", {
+        chat_id: chatId,
+        action,
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Edits an existing message's text and inline buttons in-place (used for skeleton loaders).
+   */
+  async editMessageText(
+    chatId: number | string,
+    messageId: number,
+    text: string,
+    replyMarkup?: TelegramReplyMarkup,
+    parseMode: "HTML" | "MarkdownV2" | "Markdown" = "HTML"
+  ): Promise<TelegramMessage | null> {
+    try {
+      return await this.post("editMessageText", {
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: parseMode,
+        reply_markup: replyMarkup,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Deletes a message from a chat (e.g. temporary loader message).
+   */
+  async deleteMessage(
+    chatId: number | string,
+    messageId: number
+  ): Promise<boolean> {
+    try {
+      await this.post("deleteMessage", {
+        chat_id: chatId,
+        message_id: messageId,
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

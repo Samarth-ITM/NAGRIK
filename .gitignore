@@ -33,3 +33,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+_backup_before_ui_fix/
+.tunnel.log
+.dev-server.log
+
+# runtime data
+/data/*.json
+/data/

@@ -7,10 +7,10 @@ export function DisclaimerBanner() {
         <div className="flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0 text-amber-700 dark:text-amber-400" />
           <span>
-            <strong>INDEPENDENT CIVIC PILOT:</strong> Nagrik is a research and civic coordination platform for Sector 4, Kharghar. It is not an official government portal, CIDCO service, or PMC grievance system.
+            <strong>Independent Civic Pilot:</strong> Sector 4, Kharghar (not an official CIDCO/PMC portal). Dial <strong>112</strong> for emergencies.
           </span>
         </div>
-        <span className="hidden sm:inline-block text-[11px] font-medium opacity-80 shrink-0">
+        <span className="hidden sm:inline-block text-xs font-medium opacity-80 shrink-0">
           Pilot Geofence: 500m Radius
         </span>
       </div>
