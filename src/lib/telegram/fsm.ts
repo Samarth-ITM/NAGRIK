@@ -9,6 +9,7 @@ import {
 import { PILOT_CONFIG } from "@/lib/config/pilot";
 import { calculateHaversineDistanceMetres } from "@/lib/geospatial/haversine";
 import { resolveJurisdiction } from "@/lib/geo/kharghar-jurisdiction";
+import { reverseGeocode, geocodeKhargharLandmark } from "@/lib/geo/geocode";
 import { TelegramBotClient } from "./bot";
 import { TelegramMediaService } from "./media";
 import { deriveCitizenUserHash, encryptTelegramChatId } from "./crypto";
@@ -150,7 +151,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
     choose_issue: "Pick the closest match:",
     other_option: "Other (Describe yourself)",
     send_voice_desc:
-      "🎤 <b>Step 2 of 4: Describe it in a voice note.</b>\nSpeak in English, Hindi or Marathi, or tap <b>Type instead</b>.",
+      "🎤 <b>Step 2 of 4: Describe it in a voice note.</b>\nPress and hold the 🎤 button next to the message box, speak, then let go to send. English, Hindi or Marathi all work, or tap <b>Type instead</b>.",
     btn_type_instead: "⌨️ Type instead",
     enter_description:
       "Please enter a short description of the issue (up to 500 characters):",
@@ -166,7 +167,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
       "📍 <b>Step 4 of 4: Where is it?</b>\nStand near the problem and tap <b>📍 Send my location</b> below, then confirm. Your phone shares where you are right now, nothing to upload.\n\n<i>On a computer? Type the street name or a nearby landmark instead.</i>",
     location_received: "Location recorded successfully.",
     location_out_of_bounds:
-      "⚠️ That location is {dist} m from Kharghar center. Nagrik currently covers {radius} m across Kharghar City.\nIf the problem is inside Kharghar, send its location again, choose a quick button, or type a nearby landmark.",
+      "⚠️ That location is {dist} m from Kharghar center. Nagrik currently covers {radius} m across Kharghar City.\nIf the problem is inside Kharghar, send its location again or type a nearby landmark.",
     send_photo:
       "📷 <b>Step 3 of 4: Send a photo of the problem.</b>\nTap 📎 next to the message box, choose <b>Camera</b> or a photo from your gallery, then send. One clear photo is enough.",
     photo_validating: "🔍 <i>Analyzing photo against selected issue...</i>",
@@ -188,7 +189,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
   },
   hi: {
     welcome:
-      "<b>नागरिक में आपका स्वागत है!</b>\nखारघर सेक्टर 4 के लिए आपका नागरिक पोर्टल।\n\n👇 <b>शुरू करने के लिए नीचे दिए गए बटन पर टैप करें:</b>",
+      "<b>नागरिक में आपका स्वागत है!</b>\nपूरे खारघर के लिए आपका नागरिक पोर्टल।\n\n👇 <b>शुरू करने के लिए नीचे दिए गए बटन पर टैप करें:</b>",
     choose_language: "कृपया अपनी पसंदीदा भाषा चुनें:",
     choose_problem: "📝 <b>चरण 1/4: समस्या क्या है?</b>\nसबसे मिलती-जुलती समस्या पर टैप करें।",
     other_problem: "कुछ और…",
@@ -202,7 +203,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
     choose_issue: "सबसे मिलता-जुलता विकल्प चुनें:",
     other_option: "अन्य (स्वयं विवरण दें)",
     send_voice_desc:
-      "🎤 <b>चरण 2/4: वॉइस नोट में समस्या बताएं।</b>\nहिंदी, मराठी या अंग्रेज़ी में बोलें, या <b>टाइप करें</b> दबाएं।",
+      "🎤 <b>चरण 2/4: वॉइस नोट में समस्या बताएं।</b>\nमैसेज बॉक्स के पास 🎤 बटन दबाकर रखें, बोलें, फिर छोड़ दें। हिंदी, मराठी या अंग्रेज़ी में बोलें, या <b>टाइप करें</b> दबाएं।",
     btn_type_instead: "⌨️ टाइप करें",
     enter_description: "कृपया समस्या का संक्षिप्त विवरण लिखें (अधिकतम 500 अक्षर):",
     desc_too_long: "विवरण 500 अक्षरों से अधिक है। कृपया संक्षिप्त विवरण दें:",
@@ -217,7 +218,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
       "📍 <b>चरण 4/4: समस्या कहाँ है?</b>\nनीचे <b>मेरा स्थान भेजें</b> दबाएं। आपका फ़ोन अभी का स्थान भेज देगा, कुछ अपलोड नहीं करना है।\n\n<i>कंप्यूटर पर हैं? गली का नाम या पास का कोई लैंडमार्क लिखें।</i>",
     location_received: "स्थान सफलतापूर्वक दर्ज किया गया।",
     location_out_of_bounds:
-      "⚠️ यह स्थान खारघर केंद्र से {dist} मी दूर है। नागरिक अभी पूरे खारघर शहर में {radius} मी दायरे में काम करता है।\nअगर समस्या खारघर में है, तो स्थान दोबारा भेजें, शहर बटन चुनें, या पास का लैंडमार्क लिखें।",
+      "⚠️ यह स्थान खारघर केंद्र से {dist} मी दूर है। नागरिक अभी पूरे खारघर शहर में {radius} मी दायरे में काम करता है।\nअगर समस्या खारघर में है, तो स्थान दोबारा भेजें या पास का लैंडमार्क लिखें।",
     send_photo: "📷 <b>चरण 3/4: समस्या का फोटो भेजें।</b>\nमैसेज बॉक्स के पास 📎 दबाएं, <b>कैमरा</b> या गैलरी से फोटो चुनें और भेजें। एक साफ़ फोटो काफ़ी है।",
     photo_validating: "🔍 <i>फोटो की जांच की जा रही है...</i>",
     photo_received: "फोटो सत्यापित हुआ और सुरक्षित रूप से सहेजा गया।",
@@ -238,7 +239,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
   },
   mr: {
     welcome:
-      "<b>नागरिक मध्ये आपले स्वागत आहे!</b>\nखारघर सेक्टर 4 साठी आपले नागरी तक्रार पोर्टल.\n\n👇 <b>सुरू करण्यासाठी खालील बटणावर टॅप करा:</b>",
+      "<b>नागरिक मध्ये आपले स्वागत आहे!</b>\nसंपूर्ण खारघरसाठी आपले नागरी तक्रार पोर्टल.\n\n👇 <b>सुरू करण्यासाठी खालील बटणावर टॅप करा:</b>",
     choose_language: "कृपया आपली भाषा निवडा:",
     choose_problem: "📝 <b>टप्पा 1/4: समस्या काय आहे?</b>\nसर्वात जवळच्या पर्यायावर टॅप करा.",
     other_problem: "आणखी काही…",
@@ -252,7 +253,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
     choose_issue: "सर्वात जवळचा पर्याय निवडा:",
     other_option: "इतर (स्वतः वर्णन करा)",
     send_voice_desc:
-      "🎤 <b>टप्पा 2/4: व्हॉइस मेसेजमध्ये समस्या सांगा.</b>\nमराठी, हिंदी किंवा इंग्रजीत बोला, किंवा <b>टाइप करा</b> दाबा.",
+      "🎤 <b>टप्पा 2/4: व्हॉइस मेसेजमध्ये समस्या सांगा.</b>\nमेसेज बॉक्सजवळचे 🎤 बटण दाबून ठेवा, बोला आणि सोडा. मराठी, हिंदी किंवा इंग्रजीत बोला, किंवा <b>टाइप करा</b> दाबा.",
     btn_type_instead: "⌨️ टाइप करा",
     enter_description: "कृपया समस्येचे संक्षिप्त वर्णन लिहा (कमाल 500 अक्षरे):",
     desc_too_long: "वर्णन 500 अक्षरांपेक्षा जास्त आहे. कृपया लहान वर्णन द्या:",
@@ -266,7 +267,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
     send_location: "📍 <b>टप्पा 4/4: समस्या कुठे आहे?</b>\nखाली <b>माझे स्थान पाठवा</b> दाबा. तुमचा फोन आत्ताचे स्थान पाठवेल, काहीही अपलोड करायचे नाही.\n\n<i>संगणकावर आहात? रस्त्याचे नाव किंवा जवळची खूण लिहा.</i>",
     location_received: "स्थान यशस्वीरित्या नोंदवले गेले.",
     location_out_of_bounds:
-      "⚠️ हे स्थान खारघर केंद्रापासून {dist} मी दूर आहे. नागरिक सध्या संपूर्ण खारघर शहरात {radius} मी परिसरात काम करते.\nसमस्या खारघरमध्ये असल्यास, स्थान पुन्हा पाठवा, बटण निवडा किंवा जवळची खूण लिहा.",
+      "⚠️ हे स्थान खारघर केंद्रापासून {dist} मी दूर आहे. नागरिक सध्या संपूर्ण खारघर शहरात {radius} मी परिसरात काम करते.\nसमस्या खारघरमध्ये असल्यास, स्थान पुन्हा पाठवा किंवा जवळची खूण लिहा.",
     send_photo: "📷 <b>टप्पा 3/4: समस्येचा फोटो पाठवा.</b>\nमेसेज बॉक्सजवळ 📎 दाबा, <b>कॅमेरा</b> किंवा गॅलरीतून फोटो निवडा आणि पाठवा. एक स्पष्ट फोटो पुरेसा आहे.",
     photo_validating: "🔍 <i>फोटोची पडताळणी केली जात आहे...</i>",
     photo_received: "फोटो सत्यापित झाला आणि सुरक्षितपणे जतन केला गेला.",
@@ -351,7 +352,7 @@ export class TelegramConversationFSM {
     let draftPayload: DraftPayload = activeRow?.draft_payload || {};
 
     // 3. Citizen Registration & Session Gate
-    const account = getCitizenByTelegramHash(userHash);
+    const account = await getCitizenByTelegramHash(userHash);
     const text = message?.text?.trim();
 
     // 3A. First-time citizen: Not registered yet
@@ -365,7 +366,7 @@ export class TelegramConversationFSM {
           );
           return;
         }
-        if (!isCitizenNameAvailable(cleanName, userHash)) {
+        if (!(await isCitizenNameAvailable(cleanName, userHash))) {
           // Names are owned by one Telegram account; never let a second account claim it.
           await this.bot.sendMessage(
             chat.id,
@@ -400,7 +401,7 @@ export class TelegramConversationFSM {
           draftPayload.authNamePending || cleanCitizenName(user.first_name || "") || "Citizen";
         let newAccount;
         try {
-          newAccount = registerCitizen({
+          newAccount = await registerCitizen({
             name: citizenName,
             password: text!,
             telegramUserHash: userHash,
@@ -444,7 +445,7 @@ export class TelegramConversationFSM {
         const passAttempt = text || "";
         if (message?.message_id && passAttempt) void this.bot.deleteMessage(chat.id, message.message_id);
         const lockKey = `bot-unlock:${userHash}`;
-        const locked = isRateLimited(lockKey, 5);
+        const locked = await isRateLimited(lockKey, 5);
         if (!locked.ok) {
           await this.bot.sendMessage(
             chat.id,
@@ -452,9 +453,9 @@ export class TelegramConversationFSM {
           );
           return;
         }
-        const verify = verifyCitizenPasswordByTelegramHash(userHash, passAttempt);
+        const verify = await verifyCitizenPasswordByTelegramHash(userHash, passAttempt);
         if (!verify.success) {
-          const hit = rateLimit(lockKey, 5, 15 * 60 * 1000);
+          const hit = await rateLimit(lockKey, 5, 15 * 60 * 1000);
           await this.bot.sendMessage(
             chat.id,
             hit.ok && hit.remaining > 0
@@ -463,7 +464,7 @@ export class TelegramConversationFSM {
           );
           return;
         }
-        resetRateLimit(lockKey);
+        await resetRateLimit(lockKey);
         // Successfully verified
         draftPayload.sessionUnlocked = true;
         await this.bot.sendMessage(
@@ -1203,12 +1204,20 @@ export class TelegramConversationFSM {
           // One tap on "Send my location": the phone's current GPS position.
           lat = message.location.latitude;
           lon = message.location.longitude;
-          accuracy = message.location.horizontal_accuracy || 5.0;
+          accuracy = message.location.horizontal_accuracy || 0; // 0 = phone did not report accuracy
           source = "telegram_location";
         } else if (locText && !locText.startsWith("/")) {
-          if (locText.includes("ITM")) {
+          // Typed street or landmark (computers can't share GPS): place it on the map if we can.
+          if (/\bITM\b/i.test(locText)) {
             lat = 19.0338;
-            lon = 73.0630;
+            lon = 73.063;
+          } else {
+            const found = await geocodeKhargharLandmark(locText);
+            if (found) {
+              lat = found.lat;
+              lon = found.lon;
+              accuracy = 50;
+            }
           }
           // Computers can't share GPS: accept a typed street or landmark.
           // It's kept with the report so the field team can find the spot.
@@ -1447,6 +1456,9 @@ export class TelegramConversationFSM {
       )
     );
 
+    // Look up a readable place name while the report is being saved.
+    const placePromise = reverseGeocode(lat, lon).catch(() => null);
+
     try {
       const { data, error } = await (supabase as any).rpc("create_report_submission", {
         p_telegram_user_hash: userHash,
@@ -1498,8 +1510,28 @@ export class TelegramConversationFSM {
           `\n🏢 <b>Station Address:</b> ${jur.policeAddress}\n📍 <b>Local Beat:</b> ${jur.beatChowki}`;
       }
 
+      const place = await placePromise;
+      const mapUrl = `https://maps.google.com/?q=${lat.toFixed(6)},${lon.toFixed(6)}`;
+      const acc = Math.round(draft.horizontalAccuracyM || 0);
+      const viaGps = draft.locationSource === "telegram_location";
+      const locLabel = language === "hi" ? "स्थान" : language === "mr" ? "ठिकाण" : "Location";
+      const mapLabel = language === "hi" ? "नक्शे पर देखें" : language === "mr" ? "नकाशावर पहा" : "View on map";
+      const gpsNote = viaGps
+        ? acc > 0
+          ? ` (GPS ±${acc} m)`
+          : " (GPS)"
+        : language === "hi"
+          ? " (लिखा हुआ पता)"
+          : language === "mr"
+            ? " (लिहिलेला पत्ता)"
+            : " (typed landmark)";
+      const locationLine =
+        `\n\n📍 <b>${locLabel}:</b> ${escapeHtml(place || `${lat.toFixed(5)}, ${lon.toFixed(5)}`)}${gpsNote}` +
+        `\n🗺️ <a href="${mapUrl}">${mapLabel}</a>`;
+
       const successMsg =
         MESSAGES[language].report_submitted.replace("{ticket_code}", ticketCode) +
+        locationLine +
         wardPoliceDetails;
 
       // Clear draft upon successful ticket creation
@@ -1717,7 +1749,12 @@ export class TelegramConversationFSM {
         ],
       ],
     };
-    await this.show(chatId, editMessageId, header + MESSAGES[lang].send_voice_desc, keyboard);
+    // Keep the picked problem visible on the menu message (without its buttons), then send
+    // a short animation showing hold 🎤 → speak → let go, with the step text as its caption.
+    if (editMessageId && header) {
+      void this.bot.editMessageText(chatId, editMessageId, header.trim());
+    }
+    await sendHowToAnimation(this.bot, chatId, "voice", MESSAGES[lang].send_voice_desc, keyboard);
   }
 
   private async sendPhotoPrompt(chatId: number, lang: SupportedLanguage): Promise<void> {
@@ -1758,24 +1795,11 @@ export class TelegramConversationFSM {
   }
 
   private async sendLocationPrompt(chatId: number, lang: SupportedLanguage): Promise<void> {
-    const cityBtn =
-      lang === "hi"
-        ? "📍 खारघर शहर (डिफ़ॉल्ट)"
-        : lang === "mr"
-          ? "📍 खारघर शहर (डीफॉल्ट)"
-          : "📍 Kharghar City (Default)";
-
-    const campusBtn =
-      lang === "hi"
-        ? "📍 ITM कैंपस (सेक्टर 4)"
-        : lang === "mr"
-          ? "📍 ITM कॅम्पस (सेक्टर 4)"
-          : "📍 ITM Campus (Sector 4)";
-
     const keyboard: TelegramReplyKeyboardMarkup = {
       keyboard: [
+        // Only the phone's real position. (The old "Kharghar City" / "ITM" shortcut buttons
+        // pinned every report to a fixed point, so they were removed.)
         [{ text: MESSAGES[lang].btn_share_location, request_location: true }],
-        [{ text: cityBtn }, { text: campusBtn }],
         [{ text: MESSAGES[lang].btn_cancel_report }],
       ],
       resize_keyboard: true,

@@ -22,20 +22,21 @@ function getSecret(): string {
 }
 
 function sign(payload: string): string {
-  return crypto.createHmac("sha256", getSecret()).update(payload).digest("base64url");
+  return crypto.createHmac("sha256", getSecret()).update(`citizen-session:${payload}`).digest("base64url");
 }
 
-export function createCitizenSessionToken(normalizedName: string): string {
+/** `subject` is the citizen's Telegram user hash. */
+export function createCitizenSessionToken(subject: string): string {
   const payload = Buffer.from(
-    JSON.stringify({ n: normalizedName, exp: Date.now() + CITIZEN_SESSION_MAX_AGE * 1000 }),
+    JSON.stringify({ n: subject, exp: Date.now() + CITIZEN_SESSION_MAX_AGE * 1000 }),
     "utf8"
   ).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
-/** Returns the normalized citizen name, or null if the token is missing/invalid/expired. */
+/** Returns the session subject (Telegram user hash), or null if the token is missing/invalid/expired. */
 export function readCitizenSessionToken(token: string | undefined | null): string | null {
-  if (!token || typeof token !== "string") return null;
+  if (!token || typeof token !== "string" || token.length > 1024) return null;
   const [payload, signature] = token.split(".");
   if (!payload || !signature) return null;
 

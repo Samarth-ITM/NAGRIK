@@ -56,7 +56,7 @@ export function PilotArea() {
           <svg
             viewBox="0 0 320 320"
             role="img"
-            aria-label={`Pilot area: a circle of ${PILOT_CONFIG.radiusMetres} metres around the ITM gate`}
+            aria-label={`Coverage area: a circle of ${PILOT_CONFIG.radiusMetres / 1000} km around Kharghar centre`}
           >
             <circle cx="160" cy="160" r="150" className="nk-pilot__ring" />
             <circle cx="160" cy="160" r="100" className="nk-pilot__ring nk-pilot__ring--inner" />

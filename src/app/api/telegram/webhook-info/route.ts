@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -6,9 +6,14 @@ export const dynamic = "force-dynamic";
  * Development helper: shows where Telegram is delivering bot updates and the last
  * delivery error. Never returns the bot token. Disabled in production.
  */
-export async function GET() {
-  if (process.env.NODE_ENV === "production") {
-    return NextResponse.json({ error: "Not available in production." }, { status: 404 });
+export async function GET(req: NextRequest) {
+  // Developer-only: dev mode AND opened directly on this computer (not through the tunnel).
+  const host = (req.headers.get("host") || "").split(":")[0];
+  // Requests through the Cloudflare tunnel always carry these headers.
+  const viaProxy = Boolean(req.headers.get("cf-connecting-ip") || req.headers.get("cf-ray"));
+  const isLocalHost = host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  if (process.env.NODE_ENV === "production" || viaProxy || !isLocalHost) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
   }
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return NextResponse.json({ error: "TELEGRAM_BOT_TOKEN is not set." }, { status: 500 });

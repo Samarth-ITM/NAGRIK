@@ -26,10 +26,10 @@ export default function PrivacyPage() {
               <EyeOff className="w-5 h-5" />
             </div>
             <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-              Zero Citizen Website Accounts
+              No email or phone number needed
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-              Citizens report exclusively via Telegram. There is no web registration, password creation, or email collection for citizens. Only authenticated government and super-admin users possess web login credentials.
+              Citizens report only through the Telegram bot. The bot asks for a name and a password, which also let you see your own tickets on this website. We never ask for your email address or phone number, and passwords are stored only as salted hashes.
             </p>
           </div>
 
@@ -84,7 +84,7 @@ export default function PrivacyPage() {
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
               <div>
                 <strong className="text-slate-900 dark:text-slate-200">Pilot Geofence:</strong>{" "}
-                Nagrik operates exclusively within a 500-metre radius around ITM Skills University, Sector 4, Kharghar, Navi Mumbai. Reports outside this geofence are blocked at intake.
+                Nagrik covers Kharghar, Navi Mumbai: a circle of about 6 km around the Kharghar city centre, which includes all its sectors. Reports with a location outside this area are not accepted.
               </div>
             </div>
 

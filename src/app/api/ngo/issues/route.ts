@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import { DEMO_SPOTS } from "@/lib/demo/demo-issues";
-import { displayNgoName } from "@/lib/ngo/ngo-store";
+import { displayNgoName, getNgoProfile } from "@/lib/ngo/ngo-store";
+import { requireNgoOrStaff, requireNgo } from "@/lib/auth/request-guards";
+import { bodyTooLarge, checkRepairPhoto } from "@/lib/security/uploads";
 import { resolveJurisdiction } from "@/lib/geo/kharghar-jurisdiction";
 
 /**
@@ -9,8 +11,15 @@ import { resolveJurisdiction } from "@/lib/geo/kharghar-jurisdiction";
  * Fetches all live citizen reports submitted via Telegram joined with evidence photos,
  * plus physical spots in Kharghar Sector 4.
  */
-export async function GET() {
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET(req: NextRequest) {
+  // Private citizen descriptions, exact locations and photos: NGO desk or staff only.
+  const denied = await requireNgoOrStaff(req);
+  if (denied) return denied;
   try {
+    await getNgoProfile(); // warms the cache used by displayNgoName below
     const supabase = createAdminSupabaseClient();
 
     // 1. Fetch live citizen reports from Telegram
@@ -61,7 +70,7 @@ export async function GET() {
             try {
               const { data: signed } = await supabase.storage
                 .from("evidence-private")
-                .createSignedUrl(rawPath, 86400); // 24hr signed URL
+                .createSignedUrl(rawPath, 3600); // 1 hour; the desk refetches on load
               if (signed?.signedUrl) {
                 beforePhotoUrl = signed.signedUrl;
               }
@@ -206,7 +215,7 @@ export async function GET() {
   } catch (err: any) {
     console.error("[API /api/ngo/issues error]", err);
     return NextResponse.json(
-      { success: false, error: err.message || "Failed to load issues" },
+      { success: false, error: "Failed to load issues" },
       { status: 500 }
     );
   }
@@ -217,64 +226,117 @@ export async function GET() {
  * Marks an issue/report as fixed, records the after-photo and completion note.
  */
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { id, afterPhotoUrl, resolutionNote, fixedBy } = body;
+  const denied = requireNgo(req);
+  if (denied) return denied;
 
-    if (!id) {
+  if (bodyTooLarge(req, 4 * 1024 * 1024)) {
+    return NextResponse.json(
+      { success: false, error: "The repair photo is too large. Use a photo under 2.5 MB." },
+      { status: 413 }
+    );
+  }
+
+  try {
+    const body = await req.json().catch(() => null);
+    const id = typeof body?.id === "string" ? body.id.trim() : "";
+    const resolutionNote =
+      typeof body?.resolutionNote === "string" ? body.resolutionNote.trim().slice(0, 2000) : "";
+
+    if (!id || id.length > 80 || !/^[A-Za-z0-9_-]+$/.test(id)) {
+      return NextResponse.json({ success: false, error: "Missing or invalid issue ID" }, { status: 400 });
+    }
+
+    const photo = checkRepairPhoto(body?.afterPhotoUrl);
+    if (!photo.ok) {
+      return NextResponse.json({ success: false, error: photo.error }, { status: 400 });
+    }
+    const afterPhotoUrl = photo.value;
+
+    if (!afterPhotoUrl && !resolutionNote) {
       return NextResponse.json(
-        { success: false, error: "Missing issue ID" },
+        { success: false, error: "Add a repair photo or a note describing the fix." },
         { status: 400 }
       );
     }
 
+    // The fix is always credited to the signed-in NGO, never to a name sent by the browser.
+    const fixedBy = (await getNgoProfile()).name;
+    const now = new Date().toISOString();
+
     const supabase = createAdminSupabaseClient();
 
     const resolutionMeta = JSON.stringify({
-      resolution_note: resolutionNote,
+      resolution_note: resolutionNote || null,
       after_photo_url: afterPhotoUrl,
-      fixed_by: fixedBy || "Kharghar Field NGO Maintenance Unit",
-      fixed_at: new Date().toISOString(),
+      fixed_by: fixedBy,
+      fixed_at: now,
     });
 
-    // 1. Try updating report in reports table
-    const { data: updatedReport } = await (supabase as any)
+    // 1. Report (citizen ticket): only if it exists and is not rejected.
+    let ticketCode: string | undefined;
+    const { data: report } = await (supabase as any)
       .from("reports")
-      .update({
-        review_status: "verified",
-        public_summary: resolutionMeta,
-        updated_at: new Date().toISOString(),
-      })
+      .select("id, ticket_code, review_status")
       .eq("id", id)
-      .select("id, ticket_code")
-      .single();
+      .maybeSingle();
 
-    // 2. Try updating spot in spots table
-    await (supabase as any)
+    if (report) {
+      if (report.review_status === "rejected") {
+        return NextResponse.json(
+          { success: false, error: "This report was rejected by a reviewer and can't be marked fixed." },
+          { status: 409 }
+        );
+      }
+      const { data: updatedReport } = await (supabase as any)
+        .from("reports")
+        .update({ review_status: "verified", public_summary: resolutionMeta, updated_at: now })
+        .eq("id", id)
+        .select("id, ticket_code")
+        .single();
+      ticketCode = updatedReport?.ticket_code;
+    }
+
+    // 2. Spot: an NGO can only *submit* a resolution for review. It can never close
+    //    (RESOLVED) or reopen a spot; that stays with the super-admin reviewer.
+    let spotUpdated = false;
+    const { data: spot } = await (supabase as any)
       .from("spots")
-      .update({
-        status: "RESOLUTION_SUBMITTED",
-        resolution_note: resolutionNote,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
+      .select("id, status")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (spot) {
+      if (spot.status === "RESOLVED" || spot.status === "CLOSED") {
+        return NextResponse.json(
+          { success: false, error: "This issue is already closed by a reviewer." },
+          { status: 409 }
+        );
+      }
+      await (supabase as any)
+        .from("spots")
+        .update({ status: "RESOLUTION_SUBMITTED", resolution_note: resolutionNote || null, updated_at: now })
+        .eq("id", id)
+        .neq("status", "RESOLVED");
+      spotUpdated = true;
+    }
+
+    if (!report && !spotUpdated) {
+      return NextResponse.json({ success: false, error: "Issue not found." }, { status: 404 });
+    }
 
     return NextResponse.json({
       success: true,
       message: "Resolution submitted successfully",
       id,
-      ticket_code: updatedReport?.ticket_code,
+      ticket_code: ticketCode,
       afterPhotoUrl,
       resolutionNote,
-      fixedBy: fixedBy || "Field NGO Team",
+      fixedBy,
       status: "RESOLUTION_SUBMITTED",
-      timestamp: new Date().toISOString(),
+      timestamp: now,
     });
   } catch (err: any) {
-    console.error("[API /api/ngo/issues POST error]", err);
-    return NextResponse.json(
-      { success: false, error: err.message || "Failed to submit resolution" },
-      { status: 500 }
-    );
+    console.error("[API /api/ngo/issues POST error]", err?.message || err);
+    return NextResponse.json({ success: false, error: "Failed to submit resolution" }, { status: 500 });
   }
 }

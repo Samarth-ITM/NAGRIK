@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp, minutes, rateLimit, resetRateLimit } from "@/lib/security/rate-limit";
 import {
-  getCitizenByName,
+  getCitizenByTelegramHash,
   getCitizenTickets,
   verifyCitizenPassword,
 } from "@/lib/auth/citizen-store";
@@ -30,17 +31,18 @@ async function safeTickets(name: string) {
  */
 export async function GET(req: NextRequest) {
   try {
-    const normalized = readCitizenSessionToken(req.cookies.get(CITIZEN_SESSION_COOKIE)?.value);
-    if (!normalized) {
+    // The session is tied to the citizen's Telegram identity, not their display name.
+    const telegramHash = readCitizenSessionToken(req.cookies.get(CITIZEN_SESSION_COOKIE)?.value);
+    if (!telegramHash) {
       return NextResponse.json({ success: false, authenticated: false });
     }
-    const account = getCitizenByName(normalized);
+    const account = await getCitizenByTelegramHash(telegramHash);
     if (!account) {
       const res = NextResponse.json({ success: false, authenticated: false });
       res.cookies.delete(CITIZEN_SESSION_COOKIE);
       return res;
     }
-    const tickets = await safeTickets(account.name);
+    const tickets = await safeTickets(telegramHash);
     return NextResponse.json({
       success: true,
       authenticated: true,
@@ -87,9 +89,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Brute-force protection: per network and per account name.
+  const ipKey = `citizen-login-ip:${clientIp(req)}`;
+  const nameKey = `citizen-login-name:${name.toLowerCase()}`;
+  const ipLimit = await rateLimit(ipKey, 20, 15 * 60 * 1000);
+  const nameLimit = await rateLimit(nameKey, 6, 15 * 60 * 1000);
+  if (!ipLimit.ok || !nameLimit.ok) {
+    const wait = Math.max(ipLimit.ok ? 0 : ipLimit.retryAfterSeconds, nameLimit.ok ? 0 : nameLimit.retryAfterSeconds);
+    return NextResponse.json(
+      { success: false, error: `Too many sign-in attempts. Try again in ${minutes(wait)} minutes.` },
+      { status: 429, headers: { "Retry-After": String(wait) } }
+    );
+  }
+
   try {
-    const result = verifyCitizenPassword(name, password);
-    if (!result.success || !result.account) {
+    const result = await verifyCitizenPassword(name, password);
+    if (!result.success || !result.account || !result.account.telegramUserHash) {
       // Same message for unknown name and wrong password — don't reveal which.
       return NextResponse.json(
         {
@@ -101,13 +116,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const tickets = await safeTickets(result.account.name);
+    await resetRateLimit(nameKey);
+    const tickets = await safeTickets(result.account.telegramUserHash);
     const res = NextResponse.json({
       success: true,
       citizen: { name: result.account.name },
       tickets,
     });
-    res.cookies.set(CITIZEN_SESSION_COOKIE, createCitizenSessionToken(result.account.normalizedName), {
+    res.cookies.set(CITIZEN_SESSION_COOKIE, createCitizenSessionToken(result.account.telegramUserHash), {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
@@ -116,7 +132,7 @@ export async function POST(req: NextRequest) {
     });
     return res;
   } catch (err) {
-    console.error("[citizen/auth POST]", err);
+    console.error("[citizen/auth POST]", err instanceof Error ? err.message : err);
     return NextResponse.json(
       { success: false, error: "Sign-in is temporarily unavailable. Try again in a minute." },
       { status: 500 }

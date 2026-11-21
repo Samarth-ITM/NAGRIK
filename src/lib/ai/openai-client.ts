@@ -51,7 +51,7 @@ export async function assessEvidenceWithOpenAI(
 
   const openai = new OpenAI({ apiKey: config.openAiApiKey });
 
-  const systemPrompt = `You are a strict, objective civic infrastructure repair assessment assistant for Nagrik (Pilot: Sector 4, Kharghar).
+  const systemPrompt = `You are a strict, objective civic infrastructure repair assessment assistant for Nagrik (Kharghar, Navi Mumbai).
 You are comparing two images of a reported municipal problem:
 1. "Before" image: The citizen's initial report of a defect (e.g., pothole, broken streetlight, overflowing garbage, cracked footpath).
 2. "After" image: The maintenance authority's submitted proof of repair.
@@ -182,11 +182,14 @@ export async function transcribeVoiceWithOpenAI(
 
     // Vocabulary hint only (helps spelling of local words). It never includes the chosen
     // problem name, so Whisper isn't nudged into saying something the citizen didn't.
-    let domainPrompt = "Kharghar, Sector 4, Navi Mumbai. Pothole, garbage, streetlight, drain, footpath, water leak.";
+    // No sector numbers here: a number in the hint makes Whisper write that sector even
+    // when the resident said a different one.
+    let domainPrompt =
+      "Kharghar, Navi Mumbai. Sector, Central Park, Utsav Chowk, Shilp Chowk, Belpada, ITM. Pothole, garbage, streetlight, drain, footpath, water leak.";
     if (params.language === "hi") {
-      domainPrompt = "खारघर सेक्टर 4, नवी मुंबई। गड्ढा, कचरा, स्ट्रीट लाइट, नाली, फुटपाथ, पानी।";
+      domainPrompt = "खारघर, नवी मुंबई। सेक्टर, सेंट्रल पार्क, उत्सव चौक। गड्ढा, कचरा, स्ट्रीट लाइट, नाली, फुटपाथ, पानी।";
     } else if (params.language === "mr") {
-      domainPrompt = "खारघर सेक्टर 4, नवी मुंबई. खड्डा, कचरा, पथदिवा, गटार, पदपथ, पाणी.";
+      domainPrompt = "खारघर, नवी मुंबई. सेक्टर, सेंट्रल पार्क, उत्सव चौक. खड्डा, कचरा, पथदिवा, गटार, पदपथ, पाणी.";
     }
 
     const transcription = await openai.audio.transcriptions.create({
@@ -275,7 +278,7 @@ export async function validateReportPhotoWithOpenAI(
 
   const openai = new OpenAI({ apiKey: config.openAiApiKey });
 
-  const systemPrompt = `You are an objective civic infrastructure photo verification assistant for Nagrik (Pilot: Sector 4, Kharghar).
+  const systemPrompt = `You are an objective civic infrastructure photo verification assistant for Nagrik (Kharghar, Navi Mumbai).
 A citizen is reporting a municipal infrastructure defect. Your job is to verify whether the provided photograph visibly supports the selected issue type.
 
 Citizen Report Details:

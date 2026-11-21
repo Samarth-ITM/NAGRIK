@@ -1,30 +1,15 @@
 import { NextResponse } from "next/server";
-import { getEnv } from "@/lib/validation/env";
+
+export const dynamic = "force-dynamic";
 
 /**
- * Health Check API Endpoint
- * Authority: TRD Section 15.2
- *
- * Rules:
- * - Return basic service health status
- * - Do NOT expose database connection strings, API keys, or private secrets
+ * Health check: GET /api/health
+ * Public, so it reports only that the service is up. No configuration, feature flags,
+ * area settings, versions or secrets.
  */
 export async function GET() {
-  const env = getEnv();
-
-  return NextResponse.json({
-    status: "healthy",
-    timestamp: new Date().toISOString(),
-    service: "nagrik-api",
-    version: "1.0.0",
-    pilot: {
-      id: env.PILOT_ID,
-      radius_metres: env.PILOT_RADIUS_METRES,
-      anchor_configured: Boolean(env.PILOT_CENTRE_LAT && env.PILOT_CENTRE_LON),
-    },
-    features: {
-      ai_enabled: env.AI_ENABLED,
-      voice_transcription_enabled: env.AI_VOICE_TRANSCRIPTION_ENABLED,
-    },
-  });
+  return NextResponse.json(
+    { status: "healthy", timestamp: new Date().toISOString() },
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

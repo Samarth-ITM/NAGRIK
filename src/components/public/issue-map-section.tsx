@@ -63,7 +63,7 @@ export function IssueMapSection() {
             status: s.status,
             severity_label: s.severity_label || "medium",
             report_count: s.report_count || 1,
-            location_name: s.location_name || "Sector 4, Kharghar",
+            location_name: s.location_name || "Kharghar, Navi Mumbai",
             public_summary: s.public_summary || s.title || "Civic Defect",
             created_at: s.created_at,
             updated_at: s.updated_at,
@@ -190,7 +190,7 @@ export function IssueMapSection() {
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-brand-600" />
                 <span className="font-semibold text-slate-800 dark:text-slate-200">
-                  Sector 4, Kharghar &middot; 500m ITM Radius
+                  Kharghar, Navi Mumbai
                 </span>
               </div>
               <span className="text-xs text-slate-400">

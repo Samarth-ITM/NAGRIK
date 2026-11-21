@@ -110,6 +110,7 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
   const [citizenName, setCitizenName] = useState("");
   const [citizenPassword, setCitizenPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showNgoPassword, setShowNgoPassword] = useState(false);
   const [citizenError, setCitizenError] = useState("");
   const [citizenLoading, setCitizenLoading] = useState(false);
   
@@ -122,6 +123,7 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
   const [ngoLogo, setNgoLogo] = useState<string>("");
   const [ngoSaving, setNgoSaving] = useState(false);
   const [ngoError, setNgoError] = useState("");
+  const [ngoAuthed, setNgoAuthed] = useState(false);
 
   useEffect(() => {
     // Remove the old insecure plaintext-password storage from earlier versions.
@@ -140,6 +142,11 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
           setTickets(Array.isArray(data.tickets) ? data.tickets : []);
         }
       })
+      .catch(() => {});
+
+    fetch("/api/ngo/session", { cache: "no-store" })
+      .then(readJson)
+      .then((data) => setNgoAuthed(Boolean(data?.authenticated)))
       .catch(() => {});
 
     fetch("/api/ngo/profile")
@@ -207,18 +214,58 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-      setNgoError("That logo is over 3 MB. Choose a smaller image.");
+    if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.type)) {
+      setNgoError("Choose a PNG, JPG, SVG or WebP image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setNgoError("That logo is over 5 MB. Choose a smaller image.");
       return;
     }
     setNgoError("");
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") setNgoLogo(reader.result);
+
+    if (file.type === "image/svg+xml") {
+      if (file.size > 300 * 1024) {
+        setNgoError("That SVG logo is over 300 KB. Choose a smaller file.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === "string") setNgoLogo(reader.result);
+      };
+      reader.onerror = () => setNgoError("Couldn't read that image. Try a PNG or JPG.");
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // Raster logos are shrunk to 256 px so they stay small everywhere they appear.
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("no canvas");
+        ctx.drawImage(img, 0, 0, w, h);
+        setNgoLogo(canvas.toDataURL("image/png"));
+      } catch {
+        setNgoError("Couldn't read that image. Try a PNG or JPG.");
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     };
-    reader.onerror = () => setNgoError("Couldn't read that image. Try a PNG or JPG.");
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setNgoError("Couldn't read that image. Try a PNG or JPG.");
+    };
+    img.src = url;
   };
 
   const saveNgoAndOpen = async (name: string, logo?: string) => {
@@ -230,6 +277,33 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
     } catch {
       /* storage full or unavailable — the server profile still saves */
     }
+    if (!ngoAuthed) {
+      if (!ngoPassword) {
+        setNgoError("Enter the field access password, then open the desk.");
+        setNgoSaving(false);
+        document.getElementById("ngo-pass")?.focus();
+        return;
+      }
+      try {
+        const auth = await fetch("/api/ngo/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ password: ngoPassword.trim() }),
+        });
+        const authData = await readJson(auth);
+        if (!auth.ok || !authData?.success) {
+          setNgoError(authData?.error || "That field access password is wrong.");
+          setNgoSaving(false);
+          return;
+        }
+        setNgoAuthed(true);
+        setNgoPassword("");
+      } catch {
+        setNgoError("Can't reach Nagrik. Check your internet connection and try again.");
+        setNgoSaving(false);
+        return;
+      }
+    }
     try {
       const res = await fetch("/api/ngo/profile", {
         method: "POST",
@@ -237,6 +311,12 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
         body: JSON.stringify({ name, logoUrl: logo }),
       });
       const data = await readJson(res);
+      if (res.status === 401) {
+        setNgoAuthed(false);
+        setNgoError("Your desk session ended. Enter the field access password again.");
+        setNgoSaving(false);
+        return;
+      }
       if (!res.ok || !data?.success) {
         setNgoError(data?.error || "Couldn't save your NGO profile. Try again.");
         setNgoSaving(false);
@@ -534,11 +614,14 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
                             className="sr-only"
                           />
                         </label>
-                        <p className="nk-hint">PNG, JPG, SVG or WebP, up to 3 MB</p>
+                        <p className="nk-hint">PNG, JPG, SVG or WebP. Resized to 256 px.</p>
                       </div>
                     </div>
                   </div>
 
+                  {ngoAuthed ? (
+                    <p className="nk-hint">You're signed in to the field desk on this browser.</p>
+                  ) : (
                   <div>
                     <label htmlFor="ngo-pass" className="nk-label">
                       Field access password
@@ -547,14 +630,33 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
                       <Lock aria-hidden />
                       <input
                         id="ngo-pass"
-                        type="password"
+                        type={showNgoPassword ? "text" : "password"}
                         autoComplete="current-password"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
                         value={ngoPassword}
-                        onChange={(e) => setNgoPassword(e.target.value)}
-                        className="nk-input"
+                        onChange={(e) => {
+                          setNgoPassword(e.target.value);
+                          if (ngoError) setNgoError("");
+                        }}
+                        aria-describedby="ngo-pass-hint"
+                        className="nk-input nk-input--pad-right"
                       />
+                      <button
+                        type="button"
+                        className="nk-field__toggle"
+                        onClick={() => setShowNgoPassword((v) => !v)}
+                        aria-label={showNgoPassword ? "Hide password" : "Show password"}
+                      >
+                        {showNgoPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
                     </div>
+                    <p id="ngo-pass-hint" className="nk-hint">
+                      The shared password your Nagrik admin gave your team. It is the same for everyone at your NGO.
+                    </p>
                   </div>
+                  )}
 
                   <button type="submit" disabled={ngoSaving} className="nk-btn nk-btn--sign nk-btn--block">
                     {ngoSaving && <Loader2 size={18} className="nk-spin" aria-hidden />}

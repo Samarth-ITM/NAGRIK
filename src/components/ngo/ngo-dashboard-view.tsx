@@ -3,12 +3,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CheckCircle2,
   ExternalLink,
   ImagePlus,
   Loader2,
+  LogOut,
   MapPin,
   RefreshCw,
   Search,
@@ -132,11 +134,26 @@ export function NGODashboardView() {
   const [submitting, setSubmitting] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState<string | null>(null);
 
+  const router = useRouter();
+
+  const signOut = useCallback(async () => {
+    try {
+      await fetch("/api/ngo/session", { method: "DELETE" });
+    } catch {
+      /* the cookie expires on its own */
+    }
+    router.replace("/login?role=ngo");
+  }, [router]);
+
   const loadIssues = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
       const res = await fetch("/api/ngo/issues", { cache: "no-store" });
+      if (res.status === 401) {
+        router.replace("/login?role=ngo");
+        return;
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.success) throw new Error(data?.error || "load failed");
       setIssues(Array.isArray(data.issues) ? data.issues : []);
@@ -145,7 +162,7 @@ export function NGODashboardView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     loadIssues();
@@ -284,11 +301,21 @@ export function NGODashboardView() {
           id: selected.id,
           afterPhotoUrl: fixPhoto,
           resolutionNote: fixNote.trim(),
-          fixedBy: ngoName,
         }),
       });
+      if (res.status === 401) {
+        setFixError("Your NGO desk session ended. Sign in again; your photo and note will need re-adding.");
+        router.replace("/login?role=ngo");
+        return;
+      }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.error || "submit failed");
+      if (!res.ok || !data?.success) {
+        if (res.status >= 400 && res.status < 500 && data?.error) {
+          setFixError(data.error);
+          return;
+        }
+        throw new Error("submit failed");
+      }
       const now = new Date().toISOString();
       setIssues((prev) =>
         prev.map((i) =>
@@ -298,7 +325,7 @@ export function NGODashboardView() {
                 status: "RESOLUTION_SUBMITTED",
                 after_photo_url: fixPhoto,
                 resolution_note: fixNote.trim(),
-                fixed_by: ngoName,
+                fixed_by: data.fixedBy || ngoName,
                 fixed_at: now,
                 updated_at: now,
               }
@@ -341,6 +368,14 @@ export function NGODashboardView() {
               <Link href="/login?role=ngo" className="text-brand-700 underline underline-offset-4 decoration-brand-300">
                 Edit profile
               </Link>
+              <button
+                type="button"
+                onClick={signOut}
+                className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 underline underline-offset-4 decoration-slate-300"
+              >
+                <LogOut className="w-3.5 h-3.5" aria-hidden />
+                Sign out
+              </button>
             </div>
             <h1 className="mt-3 font-serif text-4xl sm:text-5xl tracking-tight text-slate-900">Field desk</h1>
             <p className="mt-2 text-base text-slate-600">
@@ -348,7 +383,7 @@ export function NGODashboardView() {
                 ? "Loading reports"
                 : counts.TODO === 0
                 ? "Nothing waiting. Every report has a repair submitted."
-                : `${counts.TODO} report${counts.TODO === 1 ? "" : "s"} in Sector 4, Kharghar waiting for a repair.`}
+                : `${counts.TODO} report${counts.TODO === 1 ? "" : "s"} across Kharghar waiting for a repair.`}
             </p>
           </div>
           <button

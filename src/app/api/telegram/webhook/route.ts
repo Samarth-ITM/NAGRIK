@@ -3,6 +3,7 @@ import { validateWebhookSecret } from "@/lib/telegram/crypto";
 import { TelegramConversationFSM } from "@/lib/telegram/fsm";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import type { TelegramUpdate } from "@/lib/telegram/types";
+import { PILOT_CONFIG } from "@/lib/config/pilot";
 
 /**
  * Nagrik Telegram Webhook Route Handler
@@ -15,6 +16,11 @@ import type { TelegramUpdate } from "@/lib/telegram/types";
  * - Never logs raw Telegram user IDs, chat IDs, or webhook secret tokens.
  * - Safe error handling: returns HTTP 200 to acknowledge Telegram updates.
  */
+
+// Voice transcription + photo checks can take several seconds; give the function room.
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   // 1. Verify Telegram secret token header
@@ -111,7 +117,7 @@ export async function GET() {
     {
       service: "Nagrik Telegram Webhook API",
       status: "active",
-      pilot: "kharghar_itm_v1",
+      pilot: PILOT_CONFIG.id,
       mode: "webhook_listening",
     },
     { status: 200 }

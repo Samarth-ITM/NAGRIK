@@ -70,6 +70,7 @@ export class TelegramBotClient {
       text,
       parse_mode: parseMode,
       reply_markup: replyMarkup,
+      link_preview_options: { is_disabled: true },
     });
   }
 
@@ -128,8 +129,67 @@ export class TelegramBotClient {
         text,
         parse_mode: parseMode,
         reply_markup: replyMarkup,
+        link_preview_options: { is_disabled: true },
       });
     } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Sends a looping animation (silent MP4) with a caption and buttons.
+   * Pass `fileId` to reuse an upload, or `upload` to send the file the first time.
+   * Returns the sent message (its animation.file_id can be cached), or null on failure.
+   */
+  async sendAnimation(
+    chatId: number | string,
+    source: { fileId?: string; upload?: { data: Buffer; filename: string; mimeType: string } },
+    caption: string,
+    replyMarkup?: TelegramReplyMarkup,
+    meta?: { width?: number; height?: number; duration?: number }
+  ): Promise<any | null> {
+    if (!this.isConfigured) {
+      return { message_id: Math.floor(Math.random() * 1000000), animation: { file_id: "mock-animation" } };
+    }
+    try {
+      if (source.fileId) {
+        return await this.post("sendAnimation", {
+          chat_id: chatId,
+          animation: source.fileId,
+          caption,
+          parse_mode: "HTML",
+          reply_markup: replyMarkup,
+          ...meta,
+        });
+      }
+      if (!source.upload) return null;
+
+      const form = new FormData();
+      form.append("chat_id", String(chatId));
+      form.append("caption", caption);
+      form.append("parse_mode", "HTML");
+      if (replyMarkup) form.append("reply_markup", JSON.stringify(replyMarkup));
+      if (meta?.width) form.append("width", String(meta.width));
+      if (meta?.height) form.append("height", String(meta.height));
+      if (meta?.duration) form.append("duration", String(meta.duration));
+      form.append(
+        "animation",
+        new Blob([new Uint8Array(source.upload.data)], { type: source.upload.mimeType }),
+        source.upload.filename
+      );
+
+      const response = await fetch(`${TELEGRAM_API_BASE}/bot${this.token}/sendAnimation`, {
+        method: "POST",
+        body: form,
+      });
+      const json = await response.json();
+      if (!response.ok || !json.ok) {
+        throw new Error(`Telegram API error in sendAnimation: ${json.description || response.statusText}`);
+      }
+      return json.result;
+    } catch (err) {
+      const safeMsg = err instanceof Error ? err.message : "Unknown network error";
+      console.error(`Telegram API [sendAnimation] request failed: ${safeMsg}`);
       return null;
     }
   }

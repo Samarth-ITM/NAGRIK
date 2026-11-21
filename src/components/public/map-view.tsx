@@ -5,6 +5,16 @@ import L from "leaflet";
 import type { DemoSpot } from "@/lib/demo/demo-issues";
 import { statusLabel } from "@/components/shared/status-badge";
 
+/** Escapes text before it goes into a Leaflet popup (which renders HTML). */
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 interface MapViewProps {
   spots: DemoSpot[];
   selectedSpotId?: string;
@@ -119,13 +129,13 @@ export default function MapView({ spots, selectedSpotId, onSelectSpot }: MapView
       const popupHtml = `
  <div style="font-family: inherit; font-size: 12px; max-width: 220px; line-height: 1.4;">
  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
- <span style="font-weight: 700; color: #0f172a;">${spot.spot_code}</span>
- <span style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #f1f5f9; font-weight: 600;">${statusLabel(spot.status)}</span>
+ <span style="font-weight: 700; color: #0f172a;">${escapeHtml(spot.spot_code)}</span>
+ <span style="font-size: 10px; padding: 1px 5px; border-radius: 4px; background: #f1f5f9; font-weight: 600;">${escapeHtml(statusLabel(spot.status))}</span>
  </div>
- <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${spot.title}</div>
- <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">${spot.category_name}</div>
+ <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;">${escapeHtml(spot.title)}</div>
+ <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">${escapeHtml(spot.category_name)}</div>
  <div style="font-size: 10px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 4px;">
- ${spot.report_count} citizen report${spot.report_count > 1 ? "s" : ""} &middot; Sample Data
+ ${Number(spot.report_count) || 0} citizen report${Number(spot.report_count) > 1 ? "s" : ""} &middot; Sample Data
  </div>
  </div>
  `;

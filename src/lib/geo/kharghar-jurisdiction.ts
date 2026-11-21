@@ -30,24 +30,13 @@ export function resolveJurisdiction(
   hintText: string = ""
 ): KhargharJurisdiction {
   const text = (hintText || "").toLowerCase();
+  const zone = resolveZone(lat, lon, text);
 
   // 1. Kharghar South & Institutional Area (Sectors 1 to 7, ITM, Belpada, Railway Station)
-  if (
-    lat < 19.0360 ||
-    text.includes("itm") ||
-    text.includes("sector 1") ||
-    text.includes("sector 2") ||
-    text.includes("sector 3") ||
-    text.includes("sector 4") ||
-    text.includes("sector 5") ||
-    text.includes("sector 6") ||
-    text.includes("sector 7") ||
-    text.includes("belpada") ||
-    text.includes("utsav chowk") ||
-    text.includes("railway station") ||
-    text.includes("bharti")
-  ) {
-    const isStationBelpada = lat < 19.0250 || text.includes("belpada") || text.includes("station");
+  if (zone === "south") {
+    const sectorNo = extractSectorNumber(text);
+    const isStationBelpada =
+      sectorNo !== null ? sectorNo <= 2 : lat < 19.0250 || /\bbelpada\b|\bstation\b/.test(text);
     return {
       sector: isStationBelpada ? "Sector 1 / Belpada Station Node" : "Sector 4 / Institutional Area (ITM)",
       wardCode: "PMC Ward Committee 'A' (Prabhag 1)",
@@ -66,21 +55,9 @@ export function resolveJurisdiction(
   }
 
   // 2. Kharghar North & Valley Shilp (Sectors 30 to 36, RAF, Owe, Pandavkada)
-  if (
-    lat > 19.0580 ||
-    text.includes("sector 30") ||
-    text.includes("sector 31") ||
-    text.includes("sector 32") ||
-    text.includes("sector 33") ||
-    text.includes("sector 34") ||
-    text.includes("sector 35") ||
-    text.includes("sector 36") ||
-    text.includes("valley shilp") ||
-    text.includes("pandavkada") ||
-    text.includes("raf") ||
-    text.includes("owe")
-  ) {
-    const isNorthHigh = lat > 19.0700 || text.includes("sector 35") || text.includes("sector 36");
+  if (zone === "north") {
+    const sectorNo = extractSectorNumber(text);
+    const isNorthHigh = sectorNo !== null ? sectorNo >= 35 : lat > 19.0700;
     return {
       sector: isNorthHigh ? "Sector 35 / 36 (Valley Shilp & North Node)" : "Sector 30–34 (Pandavkada & Hills)",
       wardCode: "PMC Ward Committee 'A' (Prabhag 4)",
@@ -99,17 +76,7 @@ export function resolveJurisdiction(
   }
 
   // 3. Kharghar East & Central Park (Sectors 21 to 25, Golf Course, ISKCON)
-  if (
-    (lon > 73.0680 && lat >= 19.0420) ||
-    text.includes("central park") ||
-    text.includes("golf") ||
-    text.includes("iskcon") ||
-    text.includes("sector 21") ||
-    text.includes("sector 22") ||
-    text.includes("sector 23") ||
-    text.includes("sector 24") ||
-    text.includes("sector 25")
-  ) {
+  if (zone === "east") {
     return {
       sector: "Sector 23–25 / Central Park & Golf Course",
       wardCode: "PMC Ward Committee 'A' (Prabhag 3)",
@@ -143,4 +110,51 @@ export function resolveJurisdiction(
     policeAddress: "Plot 1, Sector 7, Near Utsav Chowk, Kharghar, Navi Mumbai - 410210",
     beatChowki: "Kharghar Beat Chowki No. 2 (Shilp Chowk & Market Area)",
   };
+}
+
+type Zone = "south" | "central" | "east" | "north";
+
+const DEVANAGARI_DIGITS = "०१२३४५६७८९";
+
+/**
+ * Finds a sector the resident named, e.g. "Sector 12", "sec-12", "सेक्टर १२".
+ * Word-bounded, so "Sector 12" is never read as "Sector 1".
+ */
+export function extractSectorNumber(text: string): number | null {
+  const t = (text || "")
+    .toLowerCase()
+    .replace(/[०-९]/g, (d) => String(DEVANAGARI_DIGITS.indexOf(d)));
+  const m = t.match(/(?:\bsector|\bsec\.?|सेक्टर|सेक्टर)\s*[-:#]?\s*(\d{1,2})(?!\d)/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return n >= 1 && n <= 45 ? n : null;
+}
+
+function zoneForSector(n: number): Zone {
+  if (n <= 7) return "south";
+  if (n <= 20) return "central";
+  if (n <= 29) return "east";
+  return "north";
+}
+
+/**
+ * Order of evidence:
+ * 1. A sector number the resident said or typed (their own words beat a rough map).
+ * 2. A well-known landmark name, matched as whole words.
+ * 3. The GPS position.
+ */
+function resolveZone(lat: number, lon: number, text: string): Zone {
+  const sector = extractSectorNumber(text);
+  if (sector !== null) return zoneForSector(sector);
+
+  if (/\bitm\b|\bbelpada\b|utsav chowk|railway station|\bbharti\b/.test(text)) return "south";
+  if (/valley shilp|pandavkada|\braf\b|\bowe\b/.test(text)) return "north";
+  if (/central park|\bgolf\b|\biskcon\b/.test(text)) return "east";
+  if (/shilp chowk|little world|raintree/.test(text)) return "central";
+
+  if (lat < 19.036) return "south";
+  if (lat > 19.058) return "north";
+  // East of the Sector 12 / Raintree Marg spine and north of it: Central Park side.
+  if (lon > 73.072 && lat >= 19.042) return "east";
+  return "central";
 }

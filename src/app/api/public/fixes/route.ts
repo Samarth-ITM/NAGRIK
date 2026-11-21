@@ -56,7 +56,7 @@ function clip(text: unknown, max = 180): string | null {
 export async function GET() {
   let profile: { name: string; logoUrl?: string } = { name: "Partner NGO" };
   try {
-    profile = getNgoProfile();
+    profile = await getNgoProfile();
   } catch {
     /* keep default */
   }
