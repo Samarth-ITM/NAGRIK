@@ -3,6 +3,7 @@ import path from "path";
 import crypto from "crypto";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import { displayNgoName } from "@/lib/ngo/ngo-store";
+import { resolveJurisdiction } from "@/lib/geo/kharghar-jurisdiction";
 
 export interface CitizenAccount {
   name: string;
@@ -230,6 +231,12 @@ export async function getCitizenTickets(nameOrHash: string): Promise<any[]> {
         } catch (e) {}
       }
 
+      const jur = resolveJurisdiction(
+        Number(r.latitude) || 19.0435,
+        Number(r.longitude) || 73.0680,
+        r.description_private || ""
+      );
+
       items.push({
         id: r.id,
         ticket_code: r.ticket_code,
@@ -246,6 +253,12 @@ export async function getCitizenTickets(nameOrHash: string): Promise<any[]> {
         fixed_by: fixedBy,
         resolution_note: resolutionNote,
         after_photo_url: afterPhotoUrl,
+        ward: jur.wardName,
+        ward_code: jur.wardCode,
+        police_station: jur.policeStation,
+        police_phone: jur.policePhone,
+        police_address: jur.policeAddress,
+        beat_chowki: jur.beatChowki,
         created_at: r.created_at,
       });
     }

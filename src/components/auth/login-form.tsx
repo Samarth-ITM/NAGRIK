@@ -53,6 +53,10 @@ type Ticket = {
   fixed_by?: string | null;
   resolution_note?: string | null;
   after_photo_url?: string | null;
+  ward?: string;
+  police_station?: string;
+  police_phone?: string;
+  police_address?: string;
   created_at?: string;
 };
 
@@ -390,6 +394,29 @@ export function LoginForm({ initialRole = "citizen" }: { initialRole?: "citizen"
                               </div>
                               <div>{stagePill(step)}</div>
                             </div>
+
+                            {(t.ward || t.police_station) && (
+                              <div className="nk-report__jurisdiction">
+                                {t.ward && (
+                                  <span className="nk-pill-ward">
+                                    🏛️ {t.ward}
+                                  </span>
+                                )}
+                                {t.police_station && (
+                                  <span className="nk-pill-police">
+                                    👮 {t.police_station}
+                                    {t.police_phone && (
+                                      <a
+                                        href={`tel:${t.police_phone.replace(/[^0-9]/g, "")}`}
+                                        title="Call Police Station Desk"
+                                      >
+                                        📞 {t.police_phone}
+                                      </a>
+                                    )}
+                                  </span>
+                                )}
+                              </div>
+                            )}
 
                             <ol className="nk-journey" aria-label="Progress">
                               {JOURNEY.map((label, i) => (

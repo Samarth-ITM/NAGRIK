@@ -8,6 +8,7 @@ import {
 } from "@/lib/taxonomy/nagrik-taxonomy.v1";
 import { PILOT_CONFIG } from "@/lib/config/pilot";
 import { calculateHaversineDistanceMetres } from "@/lib/geospatial/haversine";
+import { resolveJurisdiction } from "@/lib/geo/kharghar-jurisdiction";
 import { TelegramBotClient } from "./bot";
 import { TelegramMediaService } from "./media";
 import { deriveCitizenUserHash, encryptTelegramChatId } from "./crypto";
@@ -36,7 +37,8 @@ export function getMainMenuKeyboard(): TelegramReplyKeyboardMarkup {
   return {
     keyboard: [
       [{ text: "📝 Report Civic Issue" }, { text: "🎫 Track My Tickets" }],
-      [{ text: "🌐 Change Language" }, { text: "🔒 Lock Session" }],
+      [{ text: "👮 Ward Police Directory" }, { text: "🌐 Change Language" }],
+      [{ text: "🔒 Lock Session" }],
     ],
     resize_keyboard: true,
     is_persistent: true,
@@ -48,24 +50,28 @@ export function getMainMenuInlineKeyboard(lang: SupportedLanguage = "en"): Teleg
     en: {
       report: "📝 Report Civic Issue",
       track: "🎫 Track My Tickets",
+      police: "👮 Ward Police Directory",
       lang: "🌐 Change Language",
       lock: "🔒 Lock Session",
     },
     hi: {
       report: "📝 नागरिक शिकायत दर्ज करें",
       track: "🎫 मेरी शिकायतें देखें",
+      police: "👮 वॉर्ड पुलिस डायरेक्टरी",
       lang: "🌐 भाषा बदलें",
       lock: "🔒 सत्र लॉक करें",
     },
     mr: {
       report: "📝 नागरी तक्रार नोंदवा",
       track: "🎫 माझ्या तक्रारी तपासा",
+      police: "👮 वॉर्ड पोलीस माहिती",
       lang: "🌐 भाषा बदला",
       lock: "🔒 सत्र लॉक करा",
     },
   }[lang] || {
     report: "📝 Report Civic Issue",
     track: "🎫 Track My Tickets",
+    police: "👮 Ward Police Directory",
     lang: "🌐 Change Language",
     lock: "🔒 Lock Session",
   };
@@ -77,7 +83,10 @@ export function getMainMenuInlineKeyboard(lang: SupportedLanguage = "en"): Teleg
         { text: labels.track, callback_data: "action_track" },
       ],
       [
+        { text: labels.police, callback_data: "action_police_dir" },
         { text: labels.lang, callback_data: "action_language" },
+      ],
+      [
         { text: labels.lock, callback_data: "action_lock" },
       ],
     ],
@@ -458,6 +467,17 @@ export class TelegramConversationFSM {
       return;
     }
 
+    if (
+      text === "👮 Ward Police Directory" ||
+      text === "👮 वॉर्ड पुलिस डायरेक्टरी" ||
+      text === "👮 वॉर्ड पोलीस माहिती" ||
+      text === "/police" ||
+      text?.toLowerCase() === "police"
+    ) {
+      await this.sendWardPoliceDirectory(chat.id, language);
+      return;
+    }
+
     if (text === "🎫 Track My Tickets" || text === "/tickets" || text === "/track") {
       void this.bot.sendChatAction(chat.id, "typing");
       const loaderMsg = await this.bot.sendMessage(
@@ -652,6 +672,12 @@ export class TelegramConversationFSM {
         );
         await this.persistState(userHash, encryptedChatId, "IDLE", draft, language);
       }
+      return;
+    }
+
+    // Police Directory callback
+    if (data === "action_police_dir" || data.startsWith("police_")) {
+      await this.sendWardPoliceDirectory(chatId, language, msgId);
       return;
     }
 
@@ -1402,10 +1428,32 @@ export class TelegramConversationFSM {
       }
 
       const ticketCode = data?.ticket_code || "NAG-KHR-PENDING";
-      const successMsg = MESSAGES[language].report_submitted.replace(
-        "{ticket_code}",
-        ticketCode
-      );
+      const jur = resolveJurisdiction(lat, lon, draft.description || "");
+
+      let wardPoliceDetails = "";
+      if (language === "hi") {
+        wardPoliceDetails =
+          `\n\n🏛️ <b>प्रशासनिक प्रभाग / Ward:</b> ${jur.wardName}` +
+          `\n👮 <b>क्षेत्राधिकार पुलिस / Police:</b> ${jur.policeStation}` +
+          `\n📞 <b>थाना हेल्पलाइन:</b> <code>${jur.policePhone}</code> | 🚨 <b>आपातकाल:</b> 112` +
+          `\n🏢 <b>थाना पता:</b> ${jur.policeAddress}\n📍 <b>स्थानीय बीट:</b> ${jur.beatChowki}`;
+      } else if (language === "mr") {
+        wardPoliceDetails =
+          `\n\n🏛️ <b>प्रशासकीय प्रभाग / Ward:</b> ${jur.wardName}` +
+          `\n👮 <b>क्षेत्राधिकार पोलीस / Police:</b> ${jur.policeStationMr}` +
+          `\n📞 <b>ठाणे संपर्क:</b> <code>${jur.policePhone}</code> | 🚨 <b>आणीबाणी:</b> 112` +
+          `\n🏢 <b>पोलीस ठाणे पत्ता:</b> ${jur.policeAddress}\n📍 <b>स्थानिक बीट:</b> ${jur.beatChowki}`;
+      } else {
+        wardPoliceDetails =
+          `\n\n🏛️ <b>Administrative Ward:</b> ${jur.wardName}` +
+          `\n👮 <b>Jurisdictional Police:</b> ${jur.policeStation}` +
+          `\n📞 <b>Station Desk:</b> <code>${jur.policePhone}</code> | 🚨 <b>Emergency:</b> 112` +
+          `\n🏢 <b>Station Address:</b> ${jur.policeAddress}\n📍 <b>Local Beat:</b> ${jur.beatChowki}`;
+      }
+
+      const successMsg =
+        MESSAGES[language].report_submitted.replace("{ticket_code}", ticketCode) +
+        wardPoliceDetails;
 
       // Clear draft upon successful ticket creation
       await (supabase as any).rpc("clear_report_draft_by_hash", {
@@ -1415,10 +1463,11 @@ export class TelegramConversationFSM {
       const receiptKeyboard = {
         inline_keyboard: [
           [
-            { text: "🎫 Track This Ticket", callback_data: "action_track" },
-            { text: "📝 Report Another Issue", callback_data: "action_report" },
+            { text: "👮 Ward Police Info", callback_data: `police_${ticketCode}` },
+            { text: "🎫 Track Ticket", callback_data: "action_track" },
           ],
           [
+            { text: "📝 Report Another Issue", callback_data: "action_report" },
             { text: "🌐 Change Language", callback_data: "action_language" },
           ],
         ],
@@ -1673,6 +1722,12 @@ export class TelegramConversationFSM {
           ? "Attached (Unverified Manual Review)"
           : "Attached ✅";
 
+    const jur = resolveJurisdiction(
+      draft.latitude ?? PILOT_CONFIG.centreLatitude,
+      draft.longitude ?? PILOT_CONFIG.centreLongitude,
+      draft.description || ""
+    );
+
     const summaryText =
       `${MESSAGES[lang].review_title}\n\n` +
       `<b>Domain:</b> ${draft.groupId}\n` +
@@ -1680,6 +1735,8 @@ export class TelegramConversationFSM {
       `<b>Issue:</b> ${issueName}\n` +
       `<b>Description:</b> ${draft.description || "N/A"}\n` +
       `<b>Location:</b> ${draft.latitude?.toFixed(4)}, ${draft.longitude?.toFixed(4)}\n` +
+      `<b>Ward:</b> ${jur.wardName}\n` +
+      `<b>Police Authority:</b> ${jur.policeStation} (📞 ${jur.policePhone})\n` +
       `<b>Photo Evidence:</b> ${photoStatusLabel}\n` +
       `<b>Voice Note:</b> ${draft.voiceStoragePath ? "Attached ✅" : "None"}\n`;
 
@@ -1698,6 +1755,57 @@ export class TelegramConversationFSM {
     }
 
     await this.bot.sendMessage(chatId, summaryText, keyboard);
+  }
+
+  private async sendWardPoliceDirectory(
+    chatId: number,
+    lang: SupportedLanguage = "en",
+    editMessageId?: number
+  ): Promise<void> {
+    const isHi = lang === "hi";
+    const isMr = lang === "mr";
+
+    const title = isHi
+      ? "👮 <b>खारघर नगर प्रशासनिक प्रभाग एवं पुलिस क्षेत्राधिकार</b>"
+      : isMr
+      ? "👮 <b>खारघर शहर प्रशासकीय प्रभाग आणि पोलीस अधिकारक्षेत्र</b>"
+      : "👮 <b>Kharghar Municipal Ward & Police Jurisdiction</b>";
+
+    const content =
+      `${title}\n\n` +
+      `<b>🏛️ नगरपालिका प्रभाग / Municipal Authority:</b>\n` +
+      `पनवेल महानगरपालिका (PMC) प्रभाग समिती 'अ' (Kharghar Ward Committee 'A')\n` +
+      `📍 कार्यालय: सेक्टर 12, खारघर | 📞 हेल्पलाईन: <code>022-27740123</code>\n\n` +
+      `<b>👮 क्षेत्राधिकार पुलिस स्टेशन / Police Station:</b>\n` +
+      `खारघर पोलीस ठाणे (Kharghar Police Station)\n` +
+      `नवी मुंबई पोलीस आयुक्तालय (Zone II)\n` +
+      `📍 पत्ता: प्लॉट 1, सेक्टर 7, उत्सव चौक जवळ, खारघर - 410210\n` +
+      `📞 ठाणे डायरी / लँडलाईन: <code>022-27740100</code> / <code>022-27742100</code>\n` +
+      `🚨 आपातकाल / Emergency SOS: <b>डायल 112</b>\n\n` +
+      `<b>📍 स्थानिक प्रभाग एवं बीट चौकियां / Ward Beat Chowkis:</b>\n` +
+      `• <b>बीट 1 (स्टेशन, सेक्टर 1-7, ITM):</b> <code>022-27740100</code>\n` +
+      `• <b>बीट 2 (शिल्प चौक, सेक्टर 8-20):</b> <code>022-27740100</code>\n` +
+      `• <b>बीट 3 (सेंट्रल पार्क, सेक्टर 21-25):</b> <code>022-27740100</code>\n` +
+      `• <b>बीट 4 (व्हॅली शिल्प, सेक्टर 30-36):</b> <code>022-27740100</code>\n\n` +
+      `<i>💡 नागरिक ॲपवर नोंदवलेली कोणतीही समस्या संबंधित प्रभाग आणि स्थानिक पोलिसांना दृश्यमान असते.</i>`;
+
+    const keyboard: TelegramInlineKeyboardMarkup = {
+      inline_keyboard: [
+        [
+          { text: "📝 Report Civic Issue", callback_data: "action_report" },
+          { text: "🎫 Track Tickets", callback_data: "action_track" },
+        ],
+        [
+          { text: "⬅️ Main Menu", callback_data: "action_menu" },
+        ],
+      ],
+    };
+
+    if (editMessageId) {
+      const edited = await this.bot.editMessageText(chatId, editMessageId, content, keyboard);
+      if (edited) return;
+    }
+    await this.bot.sendMessage(chatId, content, keyboard);
   }
 
   private async persistState(

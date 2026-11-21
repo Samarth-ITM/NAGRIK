@@ -27,6 +27,12 @@ interface NGOIssue {
   latitude: number;
   longitude: number;
   location_name: string;
+  ward?: string;
+  ward_code?: string;
+  police_station?: string;
+  police_phone?: string;
+  police_address?: string;
+  beat_chowki?: string;
   status: "NEW" | "IN_PROGRESS" | "ASSIGNED" | "RESOLUTION_SUBMITTED" | "RESOLVED" | string;
   source: string;
   is_live: boolean;
@@ -545,6 +551,25 @@ export function NGODashboardView() {
                       Open in Google Maps
                       <ExternalLink className="w-3.5 h-3.5" aria-hidden />
                     </a>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                      <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md font-medium border border-slate-200">
+                        🏛️ {selected.ward || "Ward Committee 'A' (Kharghar)"}
+                      </span>
+                      <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 px-2.5 py-1 rounded-md font-medium border border-blue-200">
+                        👮 {selected.police_station || "Kharghar Police Station"}
+                        {selected.police_phone && (
+                          <a href={`tel:${selected.police_phone.replace(/[^0-9]/g, "")}`} className="ml-1 underline font-semibold">
+                            ({selected.police_phone})
+                          </a>
+                        )}
+                      </span>
+                      {selected.beat_chowki && (
+                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-md font-medium border border-amber-200">
+                          📍 {selected.beat_chowki}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

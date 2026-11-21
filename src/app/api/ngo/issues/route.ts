@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 import { DEMO_SPOTS } from "@/lib/demo/demo-issues";
 import { displayNgoName } from "@/lib/ngo/ngo-store";
+import { resolveJurisdiction } from "@/lib/geo/kharghar-jurisdiction";
 
 /**
  * GET /api/ngo/issues
@@ -98,6 +99,10 @@ export async function GET() {
         const isResolvedOrSubmitted =
           rep.review_status === "verified" || Boolean(afterPhotoUrl);
 
+        const repLat = Number(rep.latitude) || 19.0435;
+        const repLon = Number(rep.longitude) || 73.0680;
+        const repJur = resolveJurisdiction(repLat, repLon, rep.description_private || "");
+
         liveItems.push({
           id: rep.id,
           code: rep.ticket_code,
@@ -105,9 +110,15 @@ export async function GET() {
           category_name: categoryName,
           issue_type_id: rep.issue_type_id || "pothole",
           description: rep.description_private || "Reported via Telegram bot.",
-          latitude: Number(rep.latitude) || 19.0435,
-          longitude: Number(rep.longitude) || 73.0680,
+          latitude: repLat,
+          longitude: repLon,
           location_name: "Kharghar, Navi Mumbai",
+          ward: repJur.wardName,
+          ward_code: repJur.wardCode,
+          police_station: repJur.policeStation,
+          police_phone: repJur.policePhone,
+          police_address: repJur.policeAddress,
+          beat_chowki: repJur.beatChowki,
           status: isResolvedOrSubmitted ? "RESOLUTION_SUBMITTED" : "IN_PROGRESS",
           source: "telegram_live",
           is_live: true,
@@ -129,6 +140,10 @@ export async function GET() {
         const catName = sp.category_id
           ? sp.category_id.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
           : "Infrastructure";
+        const spLat = Number(sp.canonical_latitude) || 19.0435;
+        const spLon = Number(sp.canonical_longitude) || 73.0680;
+        const spJur = resolveJurisdiction(spLat, spLon, sp.location_name || sp.public_summary || "");
+
         liveItems.push({
           id: sp.id,
           code: sp.spot_code,
@@ -136,9 +151,15 @@ export async function GET() {
           category_name: catName,
           issue_type_id: sp.issue_type_id || "defect",
           description: sp.public_summary || "Municipal infrastructure defect tracked for repair.",
-          latitude: Number(sp.canonical_latitude) || 19.0435,
-          longitude: Number(sp.canonical_longitude) || 73.0680,
+          latitude: spLat,
+          longitude: spLon,
           location_name: sp.location_name || "Kharghar, Navi Mumbai",
+          ward: spJur.wardName,
+          ward_code: spJur.wardCode,
+          police_station: spJur.policeStation,
+          police_phone: spJur.policePhone,
+          police_address: spJur.policeAddress,
+          beat_chowki: spJur.beatChowki,
           status: sp.status || "IN_PROGRESS",
           source: "spot_database",
           is_live: !sp.is_demo,
