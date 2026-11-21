@@ -41,3 +41,4 @@ _backup_before_ui_fix/
 /data/*.json
 /data/
 push-to-github.command
+Claude outputs/
