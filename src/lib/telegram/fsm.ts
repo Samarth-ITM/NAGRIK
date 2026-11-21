@@ -20,9 +20,16 @@ import {
 import {
   getCitizenByTelegramHash,
   registerCitizen,
-  verifyCitizenPassword,
+  verifyCitizenPasswordByTelegramHash,
   getCitizenTickets,
+  cleanCitizenName,
+  isCitizenNameAvailable,
+  passwordProblem,
+  CitizenNameTakenError,
+  PASSWORD_MIN_LENGTH,
 } from "@/lib/auth/citizen-store";
+import { isRateLimited, rateLimit, resetRateLimit, minutes } from "@/lib/security/rate-limit";
+import { sendHowToAnimation } from "./how-to-animations";
 import type {
   TelegramUpdate,
   TelegramMessage,
@@ -129,7 +136,7 @@ function escapeHtml(str: string): string {
 const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
   en: {
     welcome:
-      "<b>Welcome to Nagrik!</b>\nYour civic intelligence and grievance portal for Kharghar Sector 4.\n\n👇 <b>Tap an option below to get started:</b>",
+      "<b>Welcome to Nagrik!</b>\nReport any civic problem in Kharghar and see who fixed it.\n\n👇 <b>Tap an option below to get started:</b>",
     choose_language: "Please choose your preferred language:",
     choose_problem: "📝 <b>Step 1 of 4: What's the problem?</b>\nTap the closest match.",
     other_problem: "Something else…",
@@ -156,12 +163,12 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
     transcription_failed:
       "⚠️ Could not transcribe the voice note clearly. Please record again or type:",
     send_location:
-      "📍 <b>Step 4 of 4: Where is it?</b>\nTap <b>Send my location</b> below. Your phone shares where you are right now, nothing to upload.\n\n<i>On a computer? Type the street name or a nearby landmark instead.</i>",
+      "📍 <b>Step 4 of 4: Where is it?</b>\nStand near the problem and tap <b>📍 Send my location</b> below, then confirm. Your phone shares where you are right now, nothing to upload.\n\n<i>On a computer? Type the street name or a nearby landmark instead.</i>",
     location_received: "Location recorded successfully.",
     location_out_of_bounds:
       "⚠️ That location is {dist} m from Kharghar center. Nagrik currently covers {radius} m across Kharghar City.\nIf the problem is inside Kharghar, send its location again, choose a quick button, or type a nearby landmark.",
     send_photo:
-      "📷 <b>Step 3 of 4: Send a photo of the problem.</b>\nOne clear photo is enough.",
+      "📷 <b>Step 3 of 4: Send a photo of the problem.</b>\nTap 📎 next to the message box, choose <b>Camera</b> or a photo from your gallery, then send. One clear photo is enough.",
     photo_validating: "🔍 <i>Analyzing photo against selected issue...</i>",
     photo_received: "Photograph verified and securely stored.",
     photo_mismatch:
@@ -211,7 +218,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
     location_received: "स्थान सफलतापूर्वक दर्ज किया गया।",
     location_out_of_bounds:
       "⚠️ यह स्थान खारघर केंद्र से {dist} मी दूर है। नागरिक अभी पूरे खारघर शहर में {radius} मी दायरे में काम करता है।\nअगर समस्या खारघर में है, तो स्थान दोबारा भेजें, शहर बटन चुनें, या पास का लैंडमार्क लिखें।",
-    send_photo: "📷 <b>चरण 3/4: समस्या का फोटो भेजें।</b>\nएक साफ़ फोटो काफ़ी है।",
+    send_photo: "📷 <b>चरण 3/4: समस्या का फोटो भेजें।</b>\nमैसेज बॉक्स के पास 📎 दबाएं, <b>कैमरा</b> या गैलरी से फोटो चुनें और भेजें। एक साफ़ फोटो काफ़ी है।",
     photo_validating: "🔍 <i>फोटो की जांच की जा रही है...</i>",
     photo_received: "फोटो सत्यापित हुआ और सुरक्षित रूप से सहेजा गया।",
     photo_mismatch:
@@ -260,7 +267,7 @@ const MESSAGES: Record<SupportedLanguage, Record<string, string>> = {
     location_received: "स्थान यशस्वीरित्या नोंदवले गेले.",
     location_out_of_bounds:
       "⚠️ हे स्थान खारघर केंद्रापासून {dist} मी दूर आहे. नागरिक सध्या संपूर्ण खारघर शहरात {radius} मी परिसरात काम करते.\nसमस्या खारघरमध्ये असल्यास, स्थान पुन्हा पाठवा, बटण निवडा किंवा जवळची खूण लिहा.",
-    send_photo: "📷 <b>टप्पा 3/4: समस्येचा फोटो पाठवा.</b>\nएक स्पष्ट फोटो पुरेसा आहे.",
+    send_photo: "📷 <b>टप्पा 3/4: समस्येचा फोटो पाठवा.</b>\nमेसेज बॉक्सजवळ 📎 दाबा, <b>कॅमेरा</b> किंवा गॅलरीतून फोटो निवडा आणि पाठवा. एक स्पष्ट फोटो पुरेसा आहे.",
     photo_validating: "🔍 <i>फोटोची पडताळणी केली जात आहे...</i>",
     photo_received: "फोटो सत्यापित झाला आणि सुरक्षितपणे जतन केला गेला.",
     photo_mismatch:
@@ -350,17 +357,26 @@ export class TelegramConversationFSM {
     // 3A. First-time citizen: Not registered yet
     if (!account) {
       if (state === "AWAITING_AUTH_NAME") {
-        if (!text || text.startsWith("/") || text.length < 2) {
+        const cleanName = text && !text.startsWith("/") ? cleanCitizenName(text) : null;
+        if (!cleanName) {
           await this.bot.sendMessage(
             chat.id,
-            "Please enter your full name (e.g. Daksh Srivastava):"
+            "Please enter your full name (2 to 60 letters), for example <b>Priya Sharma</b>:"
           );
           return;
         }
-        draftPayload.authNamePending = text;
+        if (!isCitizenNameAvailable(cleanName, userHash)) {
+          // Names are owned by one Telegram account; never let a second account claim it.
+          await this.bot.sendMessage(
+            chat.id,
+            `That name is already registered by another Telegram account.\nAdd your surname, initial or sector so it's unique, for example <b>${escapeHtml(cleanName)} Sec 12</b>:`
+          );
+          return;
+        }
+        draftPayload.authNamePending = cleanName;
         await this.bot.sendMessage(
           chat.id,
-          `🔐 Welcome, <b>${escapeHtml(text)}</b>!\n\nPlease enter a <b>Password</b> (e.g. 1234):\n<i>You will need this password every time you use the bot, and to log into the Nagrik Web Portal to track tickets.</i>`
+          `🔐 Welcome, <b>${escapeHtml(cleanName)}</b>!\n\nNow choose a <b>password</b> of at least ${PASSWORD_MIN_LENGTH} characters. Avoid easy ones like 123456.\n<i>You'll use it to unlock this bot and to sign in on the Nagrik website. Your message is deleted from this chat after it's saved.</i>`
         );
         await this.persistState(
           userHash,
@@ -373,20 +389,35 @@ export class TelegramConversationFSM {
       }
 
       if (state === "AWAITING_AUTH_PASSWORD") {
-        if (!text || text.startsWith("/") || text.length < 2) {
-          await this.bot.sendMessage(
-            chat.id,
-            "Please enter a valid password (at least 2 characters):"
-          );
+        // Remove the password from the chat history as soon as we've read it.
+        if (message?.message_id && text) void this.bot.deleteMessage(chat.id, message.message_id);
+        const problem = !text || text.startsWith("/") ? `at least ${PASSWORD_MIN_LENGTH} characters` : passwordProblem(text);
+        if (problem) {
+          await this.bot.sendMessage(chat.id, `That password won't work. It must be ${problem}. Please send another:`);
           return;
         }
-        const citizenName = draftPayload.authNamePending || user.first_name || "Citizen";
-        const newAccount = registerCitizen({
-          name: citizenName,
-          password: text,
-          telegramUserHash: userHash,
-          telegramUserId: user.id,
-        });
+        const citizenName =
+          draftPayload.authNamePending || cleanCitizenName(user.first_name || "") || "Citizen";
+        let newAccount;
+        try {
+          newAccount = registerCitizen({
+            name: citizenName,
+            password: text!,
+            telegramUserHash: userHash,
+            telegramUserId: user.id,
+          });
+        } catch (err) {
+          if (err instanceof CitizenNameTakenError) {
+            delete draftPayload.authNamePending;
+            await this.bot.sendMessage(
+              chat.id,
+              "Someone registered that name a moment ago. Please send your full name again, with your surname or sector added:"
+            );
+            await this.persistState(userHash, encryptedChatId, "AWAITING_AUTH_NAME", draftPayload, language);
+            return;
+          }
+          throw err;
+        }
         draftPayload.sessionUnlocked = true;
         delete draftPayload.authNamePending;
         await this.bot.sendMessage(
@@ -401,7 +432,7 @@ export class TelegramConversationFSM {
       // Initial greeting asking for citizen name
       await this.bot.sendMessage(
         chat.id,
-        "👋 <b>Welcome to Nagrik!</b>\nKharghar Sector 4 Civic Grievance Portal.\n\nTo begin reporting issues and tracking their repair, please enter your <b>Full Name</b>:\n<i>(This name will protect your civic reports and allow you to view your tickets on the web portal)</i>"
+        "👋 <b>Welcome to Nagrik!</b>\nReport civic problems anywhere in Kharghar and see who fixed them.\n\nTo begin reporting issues and tracking their repair, please enter your <b>Full Name</b>:\n<i>(This name will protect your civic reports and allow you to view your tickets on the web portal)</i>"
       );
       await this.persistState(userHash, encryptedChatId, "AWAITING_AUTH_NAME", {}, language);
       return;
@@ -411,19 +442,33 @@ export class TelegramConversationFSM {
     if (!draftPayload.sessionUnlocked) {
       if (state === "AWAITING_SESSION_PASSWORD") {
         const passAttempt = text || "";
-        const verify = verifyCitizenPassword(account.normalizedName, passAttempt);
-        if (!verify.success) {
+        if (message?.message_id && passAttempt) void this.bot.deleteMessage(chat.id, message.message_id);
+        const lockKey = `bot-unlock:${userHash}`;
+        const locked = isRateLimited(lockKey, 5);
+        if (!locked.ok) {
           await this.bot.sendMessage(
             chat.id,
-            "❌ <b>Incorrect password.</b> Please try again:"
+            `⏳ Too many wrong passwords. Try again in ${minutes(locked.retryAfterSeconds)} minutes.`
           );
           return;
         }
+        const verify = verifyCitizenPasswordByTelegramHash(userHash, passAttempt);
+        if (!verify.success) {
+          const hit = rateLimit(lockKey, 5, 15 * 60 * 1000);
+          await this.bot.sendMessage(
+            chat.id,
+            hit.ok && hit.remaining > 0
+              ? `❌ <b>Incorrect password.</b> ${hit.remaining} ${hit.remaining === 1 ? "try" : "tries"} left. Please try again:`
+              : `⏳ Too many wrong passwords. Try again in ${minutes(hit.retryAfterSeconds)} minutes.`
+          );
+          return;
+        }
+        resetRateLimit(lockKey);
         // Successfully verified
         draftPayload.sessionUnlocked = true;
         await this.bot.sendMessage(
           chat.id,
-          `🔓 <b>Session Unlocked!</b>\n\nWelcome back, <b>${escapeHtml(account.name)}</b>! How can we help you in Kharghar Sector 4 today?\n\n👇 <b>Tap an option below:</b>`,
+          `🔓 <b>Session Unlocked!</b>\n\nWelcome back, <b>${escapeHtml(account.name)}</b>! How can we help in Kharghar today?\n\n👇 <b>Tap an option below:</b>`,
           getMainMenuInlineKeyboard(language)
         );
         await this.persistState(userHash, encryptedChatId, "IDLE", draftPayload, language);
@@ -453,6 +498,7 @@ export class TelegramConversationFSM {
       text === "/report" ||
       text === "/new"
     ) {
+      if (await this.dailyLimitReached(chat.id, userHash, language)) return;
       // Ask for the language at the start of a report, unless it was just chosen.
       const recent = draftPayload.languageChosenAt && Date.now() - draftPayload.languageChosenAt < 15 * 60 * 1000;
       if (recent) {
@@ -484,14 +530,14 @@ export class TelegramConversationFSM {
         chat.id,
         renderTelegramSkeletonLoader(
           "Loading Civic Tickets",
-          "Connecting to Kharghar Sector 4 ledger...",
+          "Fetching your reports...",
           2
         )
       );
 
-      const tickets = await getCitizenTickets(account.name);
+      const tickets = await getCitizenTickets(userHash);
       if (tickets.length === 0) {
-        const emptyMsg = "🎫 <b>No Active Reports Found</b>\n\nYou haven't submitted any civic defect reports yet.\n\nTap <b>📝 Report Civic Issue</b> below to report your first defect in Kharghar Sector 4!";
+        const emptyMsg = "🎫 <b>No Active Reports Found</b>\n\nYou haven't submitted any civic defect reports yet.\n\nTap <b>📝 Report Civic Issue</b> below to report your first civic problem in Kharghar.";
         const emptyKeyboard = {
           inline_keyboard: [
             [{ text: "📝 Report Civic Issue", callback_data: "action_report" }],
@@ -514,9 +560,9 @@ export class TelegramConversationFSM {
             month: "short",
             year: "numeric",
           });
-          msg += `${numEmoji} <b>Ticket:</b> <code>${t.ticket_code}</code>\n`;
-          msg += `📁 <b>Category:</b> ${t.category}\n`;
-          msg += `📊 <b>Status:</b> ${t.status_label}\n`;
+          msg += `${numEmoji} <b>Ticket:</b> <code>${escapeHtml(String(t.ticket_code ?? ""))}</code>\n`;
+          msg += `📁 <b>Category:</b> ${escapeHtml(String(t.category ?? ""))}\n`;
+          msg += `📊 <b>Status:</b> ${escapeHtml(String(t.status_label ?? ""))}\n`;
           if (t.description) {
             msg += `📝 <b>Description:</b> "${escapeHtml(t.description)}"\n`;
           }
@@ -683,6 +729,7 @@ export class TelegramConversationFSM {
 
     // Action: Report Civic Issue from inline button
     if (data === "action_report") {
+      if (await this.dailyLimitReached(chatId, userHash, language)) return;
       // Ask for the language at the start of a report, unless it was just chosen.
       const recent = draft.languageChosenAt && Date.now() - draft.languageChosenAt < 15 * 60 * 1000;
       if (recent) {
@@ -704,16 +751,14 @@ export class TelegramConversationFSM {
         chatId,
         renderTelegramSkeletonLoader(
           "Loading Civic Tickets",
-          "Connecting to Kharghar Sector 4 ledger...",
+          "Fetching your reports...",
           2
         )
       );
 
-      const account = getCitizenByTelegramHash(userHash);
-      const citizenName = account ? account.name : "Citizen";
-      const tickets = await getCitizenTickets(citizenName);
+      const tickets = await getCitizenTickets(userHash);
       if (tickets.length === 0) {
-        const emptyMsg = "🎫 <b>No Active Reports Found</b>\n\nYou haven't submitted any civic defect reports yet.\n\nTap <b>📝 Report Civic Issue</b> below to report your first defect in Kharghar Sector 4!";
+        const emptyMsg = "🎫 <b>No Active Reports Found</b>\n\nYou haven't submitted any civic defect reports yet.\n\nTap <b>📝 Report Civic Issue</b> below to report your first civic problem in Kharghar.";
         const emptyKeyboard = {
           inline_keyboard: [
             [{ text: "📝 Report Civic Issue", callback_data: "action_report" }],
@@ -1330,7 +1375,7 @@ export class TelegramConversationFSM {
    * 1. Photographic evidence exists.
    * 2. Photo validation passed (MATCH or explicit UNVERIFIED fallback).
    * 3. Validated photo sha256 matches current photo and issue type.
-   * 4. Location is strictly within Kharghar Sector 4 pilot boundary.
+   * 4. Location is inside the Kharghar coverage radius.
    */
   private async submitReport(
     chatId: number,
@@ -1372,7 +1417,7 @@ export class TelegramConversationFSM {
       return;
     }
 
-    // 4. Strict Pilot Geofence Check (<= 500m)
+    // 4. Coverage check (PILOT_CONFIG.radiusMetres around Kharghar centre)
     const lat = draft.latitude ?? PILOT_CONFIG.centreLatitude;
     const lon = draft.longitude ?? PILOT_CONFIG.centreLongitude;
     const dist = calculateHaversineDistanceMetres(
@@ -1385,10 +1430,12 @@ export class TelegramConversationFSM {
     if (dist > PILOT_CONFIG.radiusMetres) {
       await this.bot.sendMessage(
         chatId,
-        "⚠️ Cannot submit report: location is outside Kharghar Sector 4 pilot boundary."
+        "⚠️ Cannot submit report: that location is outside the Kharghar area Nagrik covers."
       );
       return;
     }
+
+    if (await this.dailyLimitReached(chatId, userHash, language)) return;
 
     void this.bot.sendChatAction(chatId, "typing");
     const loaderMsg = await this.bot.sendMessage(
@@ -1509,6 +1556,42 @@ export class TelegramConversationFSM {
   // ==========================================================================
   // Helper UI methods
   // ==========================================================================
+
+  /**
+   * Daily report cap per Telegram user (MAX_REPORTS_PER_TELEGRAM_USER_PER_DAY, rolling 24 h).
+   * Sends a message and returns true when the limit is reached. If the count can't be
+   * read, reporting stays open rather than blocking residents.
+   */
+  private async dailyLimitReached(chatId: number, userHash: string, lang: SupportedLanguage): Promise<boolean> {
+    const limit = Number(process.env.MAX_REPORTS_PER_TELEGRAM_USER_PER_DAY) || 100;
+    try {
+      const supabase = createAdminSupabaseClient();
+      const { data: contacts } = await (supabase as any)
+        .from("citizen_contacts")
+        .select("id")
+        .eq("telegram_user_hash", userHash)
+        .limit(1);
+      const contactId = contacts?.[0]?.id;
+      if (!contactId) return false;
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count, error } = await (supabase as any)
+        .from("reports")
+        .select("id", { count: "exact", head: true })
+        .eq("citizen_contact_id", contactId)
+        .gte("created_at", since);
+      if (error || typeof count !== "number" || count < limit) return false;
+    } catch {
+      return false;
+    }
+    const msg =
+      lang === "hi"
+        ? `⏳ आपने पिछले 24 घंटों में ${limit} शिकायतें भेजी हैं, जो दैनिक सीमा है। कल फिर से रिपोर्ट करें। आपकी मौजूदा शिकायतों पर काम जारी है।`
+        : lang === "mr"
+          ? `⏳ तुम्ही गेल्या 24 तासांत ${limit} तक्रारी पाठवल्या आहेत, ही दैनिक मर्यादा आहे. उद्या पुन्हा तक्रार करा. तुमच्या सध्याच्या तक्रारींवर काम सुरू आहे.`
+          : `⏳ You've sent ${limit} reports in the last 24 hours, which is the daily limit. You can report again tomorrow. Your existing tickets are still being tracked.`;
+    await this.bot.sendMessage(chatId, msg, getMainMenuInlineKeyboard(lang));
+    return true;
+  }
 
   /** Edit an existing bot message in place (faster, cleaner chat); fall back to sending a new one. */
   private async show(
@@ -1646,7 +1729,8 @@ export class TelegramConversationFSM {
         ],
       ],
     };
-    await this.bot.sendMessage(chatId, MESSAGES[lang].send_photo, keyboard);
+    // Short animation showing 📎 → Camera → send, with the step text as its caption.
+    await sendHowToAnimation(this.bot, chatId, "photo", MESSAGES[lang].send_photo, keyboard);
   }
 
   private async sendTranscriptReview(
@@ -1697,7 +1781,8 @@ export class TelegramConversationFSM {
       resize_keyboard: true,
       one_time_keyboard: true,
     };
-    await this.bot.sendMessage(chatId, MESSAGES[lang].send_location, keyboard);
+    // Short animation showing the "Send my location" tap and confirm, with the step text as its caption.
+    await sendHowToAnimation(this.bot, chatId, "location", MESSAGES[lang].send_location, keyboard);
   }
 
   private async sendReviewSummary(

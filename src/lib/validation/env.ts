@@ -48,7 +48,7 @@ export const envSchema = z.object({
 
   // Limits
   SUPER_ADMIN_EMAIL: z.string().email().optional(),
-  MAX_REPORTS_PER_TELEGRAM_USER_PER_DAY: z.coerce.number().default(5),
+  MAX_REPORTS_PER_TELEGRAM_USER_PER_DAY: z.coerce.number().default(100),
   MAX_PHOTO_SIZE_MB: z.coerce.number().default(8),
   MAX_VOICE_SIZE_MB: z.coerce.number().default(10),
   MAX_VOICE_DURATION_SECONDS: z.coerce.number().default(60),
