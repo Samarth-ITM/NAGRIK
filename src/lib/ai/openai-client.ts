@@ -162,6 +162,41 @@ function collapseRepeatedPhrases(text: string): string {
   return out.join(" ");
 }
 
+const tokens = (text: string): string[] =>
+  text
+    .toLowerCase()
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+/**
+ * Whisper sometimes "hears" its own vocabulary hint when the clip has no clear speech
+ * (silence, a very short tap, wind or traffic) and returns the hint as the transcript.
+ * True when nearly every word of the transcript comes straight from the hint.
+ */
+export function isPromptEcho(transcript: string, prompt: string): boolean {
+  const t = tokens(transcript);
+  if (t.length < 2) return false;
+  const hint = new Set(tokens(prompt));
+  const fromHint = t.filter((w) => hint.has(w)).length;
+  return fromHint / t.length >= 0.8;
+}
+
+/** Stock phrases Whisper invents on silent audio. */
+const SILENCE_HALLUCINATIONS = [
+  /^(thank you|thanks)( so much)?( for watching)?[.!]*$/i,
+  /^(please )?subscribe/i,
+  /subtitles? (by|from)/i,
+  /amara\.org/i,
+  /^(you|bye|music|\[music\]|\(music\))[.!]*$/i,
+  /^धन्यवाद[।.!]*$/,
+];
+export function isSilenceHallucination(transcript: string): boolean {
+  const t = transcript.trim();
+  return SILENCE_HALLUCINATIONS.some((re) => re.test(t));
+}
+
 export async function transcribeVoiceWithOpenAI(
   params: VoiceTranscriptionParams
 ): Promise<{ transcript: string; language?: string; duration?: number }> {
@@ -176,10 +211,6 @@ export async function transcribeVoiceWithOpenAI(
   const openai = new OpenAI({ apiKey: config.openAiApiKey });
 
   try {
-    const file = await toFile(params.audioBuffer, params.filename || "voice.oga", {
-      type: params.mimeType || "audio/ogg",
-    });
-
     // Vocabulary hint only (helps spelling of local words). It never includes the chosen
     // problem name, so Whisper isn't nudged into saying something the citizen didn't.
     // No sector numbers here: a number in the hint makes Whisper write that sector even
@@ -192,20 +223,33 @@ export async function transcribeVoiceWithOpenAI(
       domainPrompt = "खारघर, नवी मुंबई. सेक्टर, सेंट्रल पार्क, उत्सव चौक. खड्डा, कचरा, पथदिवा, गटार, पदपथ, पाणी.";
     }
 
-    const transcription = await openai.audio.transcriptions.create({
-      file,
-      model: "whisper-1",
-      temperature: 0,
-      prompt: domainPrompt,
-      ...(params.language && ["en", "hi", "mr"].includes(params.language)
-        ? { language: params.language }
-        : {}),
-    });
+    const run = async (prompt?: string) => {
+      const res = await openai.audio.transcriptions.create({
+        file: await toFile(params.audioBuffer, params.filename || "voice.oga", {
+          type: params.mimeType || "audio/ogg",
+        }),
+        model: "whisper-1",
+        temperature: 0,
+        ...(prompt ? { prompt } : {}),
+        ...(params.language && ["en", "hi", "mr"].includes(params.language)
+          ? { language: params.language }
+          : {}),
+      });
+      // Verbatim: exactly what was said. No AI rewriting, polishing or summarising.
+      // The only clean-up is collapsing Whisper's known glitch of looping the same phrase.
+      return collapseRepeatedPhrases(res.text?.trim() || "");
+    };
 
-    // Verbatim: exactly what was said. No AI rewriting, polishing or summarising.
-    // The only clean-up is collapsing Whisper's known glitch of looping the same phrase.
-    const rawTranscript = collapseRepeatedPhrases(transcription.text?.trim() || "");
+    let rawTranscript = await run(domainPrompt);
+    if (rawTranscript && isPromptEcho(rawTranscript, domainPrompt)) {
+      // Looks like the hint came back instead of speech: listen again without any hint.
+      console.warn("[Whisper] transcript matched the vocabulary hint; retrying without it");
+      rawTranscript = await run();
+      if (isPromptEcho(rawTranscript, domainPrompt)) rawTranscript = "";
+    }
+    if (rawTranscript && isSilenceHallucination(rawTranscript)) rawTranscript = "";
     if (!rawTranscript) {
+      // Empty means "couldn't hear speech": the bot asks to record again or type instead.
       return { transcript: "" };
     }
 
