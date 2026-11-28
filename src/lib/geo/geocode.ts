@@ -56,7 +56,7 @@ export async function reverseGeocode(lat: number, lon: number): Promise<string |
   return label;
 }
 
-/** Finds a typed landmark inside Kharghar. Returns null if it can't be placed. */
+/** Finds a typed landmark inside Kharghar or across India/worldwide. Returns null if it can't be placed. */
 export async function geocodeKhargharLandmark(
   text: string
 ): Promise<{ lat: number; lon: number; label: string } | null> {
@@ -65,11 +65,21 @@ export async function geocodeKhargharLandmark(
   const key = `f:${q.toLowerCase()}`;
   if (cache.has(key)) return cache.get(key) as { lat: number; lon: number; label: string } | null;
 
+  // Try Kharghar bounded first
   const query = /kharghar/i.test(q) ? q : `${q}, Kharghar, Navi Mumbai`;
-  const j = await getJson(
+  let j = await getJson(
     `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&bounded=1&viewbox=${KHARGHAR_VIEWBOX}&q=${encodeURIComponent(query)}`
   );
-  const hit = Array.isArray(j) && j[0] ? j[0] : null;
+  let hit = Array.isArray(j) && j[0] ? j[0] : null;
+
+  // If not found inside Kharghar, search across India / anywhere
+  if (!hit) {
+    j = await getJson(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`
+    );
+    hit = Array.isArray(j) && j[0] ? j[0] : null;
+  }
+
   const result =
     hit && Number.isFinite(+hit.lat) && Number.isFinite(+hit.lon)
       ? { lat: +hit.lat, lon: +hit.lon, label: String(hit.name || hit.display_name || q).slice(0, 80) }

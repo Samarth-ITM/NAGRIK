@@ -1231,7 +1231,7 @@ export class TelegramConversationFSM {
           return;
         }
 
-        // Apply Kharghar City geofence check (coverage radius: PILOT_CONFIG.radiusMetres)
+        // Apply geofence check (bypassed if allowAnyLocation is active)
         const dist = calculateHaversineDistanceMetres(
           lat,
           lon,
@@ -1239,7 +1239,7 @@ export class TelegramConversationFSM {
           PILOT_CONFIG.centreLongitude
         );
 
-        if (dist > PILOT_CONFIG.radiusMetres) {
+        if (!PILOT_CONFIG.allowAnyLocation && dist > PILOT_CONFIG.radiusMetres) {
           const warning = MESSAGES[language].location_out_of_bounds
             .replace("{dist}", Math.round(dist).toString())
             .replace("{radius}", PILOT_CONFIG.radiusMetres.toString());
@@ -1426,7 +1426,7 @@ export class TelegramConversationFSM {
       return;
     }
 
-    // 4. Coverage check (PILOT_CONFIG.radiusMetres around Kharghar centre)
+    // 4. Coverage check (bypassed if allowAnyLocation is active)
     const lat = draft.latitude ?? PILOT_CONFIG.centreLatitude;
     const lon = draft.longitude ?? PILOT_CONFIG.centreLongitude;
     const dist = calculateHaversineDistanceMetres(
@@ -1436,10 +1436,10 @@ export class TelegramConversationFSM {
       PILOT_CONFIG.centreLongitude
     );
 
-    if (dist > PILOT_CONFIG.radiusMetres) {
+    if (!PILOT_CONFIG.allowAnyLocation && dist > PILOT_CONFIG.radiusMetres) {
       await this.bot.sendMessage(
         chatId,
-        "⚠️ Cannot submit report: that location is outside the Kharghar area Nagrik covers."
+        "⚠️ Cannot submit report: that location is outside the coverage area."
       );
       return;
     }

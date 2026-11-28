@@ -4,6 +4,8 @@
  * Administrative Wards and Navi Mumbai Police Commissionerate jurisdictions.
  */
 
+import { calculateHaversineDistanceMetres } from "@/lib/geospatial/haversine";
+
 export interface KhargharJurisdiction {
   sector: string;
   wardCode: string;
@@ -30,6 +32,27 @@ export function resolveJurisdiction(
   hintText: string = ""
 ): KhargharJurisdiction {
   const text = (hintText || "").toLowerCase();
+
+  // If coordinates are clearly outside Kharghar (> 15km) and no Kharghar sector mentioned, provide general regional civic/police routing
+  const distFromKharghar = calculateHaversineDistanceMetres(lat, lon, 19.0435, 73.0680);
+  if (distFromKharghar > 15000 && !/kharghar|sector\s*\d/i.test(text)) {
+    return {
+      sector: "Municipal Jurisdiction / Urban Local Body",
+      wardCode: "Local Municipal Ward / Division",
+      wardName: "Jurisdictional Municipal Corporation / Council",
+      wardOffice: "Local Municipal Corporation / Ward Administration Desk",
+      wardContact: "1916 (Civic Helpline)",
+      policeStation: "Jurisdictional Police Station",
+      policeStationMr: "स्थानिक पोलीस ठाणे",
+      policeDivision: "State Police Commissionerate / District Police",
+      policePhone: "112 (National Emergency Helpline)",
+      policePhoneAlt: "100",
+      policeEmergency: "112",
+      policeAddress: "Jurisdictional Police Station Desk",
+      beatChowki: "Local Beat Chowki / Mobile Patrol Unit",
+    };
+  }
+
   const zone = resolveZone(lat, lon, text);
 
   // 1. Kharghar South & Institutional Area (Sectors 1 to 7, ITM, Belpada, Railway Station)

@@ -1,3 +1,5 @@
+import { NgoFixStack } from "@/components/public/ngo-fix-stack";
+import Link from "next/link";
 import { Hero } from "@/components/public/hero";
 import { HowItWorks } from "@/components/public/how-it-works";
 import { BeforeAfter } from "@/components/public/before-after";
@@ -22,10 +24,17 @@ export default async function HomePage() {
 
   return (
     <main className="flex-1 flex flex-col">
-      <Hero initialFixes={initialFixes} />
+      <Hero />
       <HowItWorks />
       <BeforeAfter />
       <ReportGrid />
+      <section aria-labelledby="repairs-title" className="street-repairs">
+        <div>
+          <h2 id="repairs-title" className="nk-h2">Recently fixed</h2>
+          <Link href="/#issues">View the issue map <span aria-hidden>→</span></Link>
+        </div>
+        <NgoFixStack initial={initialFixes} />
+      </section>
       <IssueMapSection />
       <AccountabilitySection />
       <PilotArea />

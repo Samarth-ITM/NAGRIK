@@ -82,19 +82,19 @@ export function Header() {
     n.section ? pathname === "/" && activeSection === n.section : pathname === n.href;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-slate-50/85 backdrop-blur-md">
+    <header className="street-header sticky top-0 z-50 border-b border-slate-200/80 bg-slate-50/85 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2.5 shrink-0 rounded-lg" aria-label="Nagrik home">
-          <span className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center">
+          <span className="street-mark w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center">
             <Shield className="w-[18px] h-[18px]" aria-hidden />
           </span>
           <span className="leading-tight">
-            <span className="block text-[17px] font-extrabold tracking-tight text-slate-900">Nagrik</span>
+            <span className="street-wordmark block text-[17px] font-extrabold tracking-tight text-slate-900">Nagrik</span>
             <span className="block text-xs text-slate-500">Kharghar, Navi Mumbai</span>
           </span>
         </Link>
 
-        <nav aria-label="Main" className="hidden md:flex items-center gap-1">
+        <nav aria-label="Main" className="hidden lg:flex items-center gap-1">
           {NAV.map((n) => {
             const active = isActive(n);
             return (
@@ -149,7 +149,7 @@ export function Header() {
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
-            className="md:hidden w-11 h-11 flex items-center justify-center rounded-xl text-slate-800 hover:bg-white transition-colors"
+            className="lg:hidden w-11 h-11 flex items-center justify-center rounded-xl text-slate-800 hover:bg-white transition-colors"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             aria-controls="mobile-menu"
@@ -160,7 +160,7 @@ export function Header() {
       </div>
 
       {open && (
-        <div id="mobile-menu" className="md:hidden border-t border-slate-200 bg-slate-50 px-4 pt-3 pb-5">
+        <div id="mobile-menu" className="lg:hidden border-t border-slate-200 bg-slate-50 px-4 pt-3 pb-5">
           <a
             href={PUBLIC_BOT_URL}
             target="_blank"

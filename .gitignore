@@ -42,3 +42,9 @@ _backup_before_ui_fix/
 /data/
 push-to-github.command
 Claude outputs/
+
+# large video exports
+/*.mp4
+/presentation/*.mp4
+/docs/media/*.mp4
+!/public/telegram/*.mp4
